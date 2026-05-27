@@ -1,0 +1,4 @@
+# Kopiraj u application-local.properties i podesi svoju PostgreSQL lozinku:
+#   copy application-local.properties.example application-local.properties
+#
+spring.datasource.password=YOUR_POSTGRES_PASSWORD
