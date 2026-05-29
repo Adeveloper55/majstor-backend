@@ -34,6 +34,7 @@ public class AdminService {
     private final EmailService emailService;
     private final ContactMessageRepository contactMessageRepository;
     private final JobApplicationRepository jobApplicationRepository;
+    private final CompanyRegistrationRepository companyRegistrationRepository;
 
     public Page<DtoMapper.UserDto> listUsers(String search, Pageable pageable) {
         if (search != null && !search.isBlank()) {
@@ -182,6 +183,7 @@ public class AdminService {
         stats.put("pendingJobApplications", jobApplicationRepository.countByStatus("PENDING"));
         stats.put("totalReviews", reviewRepository.count());
         stats.put("newContactMessages", contactMessageRepository.countByStatus("NEW"));
+        stats.put("pendingCompanyRegistrations", companyRegistrationRepository.countByStatus("PENDING"));
 
         BigDecimal revenue = requestRepository.findByStatus("APPROVED", Pageable.unpaged()).getContent().stream()
                 .map(TokenPurchaseRequest::getAmountExpected)

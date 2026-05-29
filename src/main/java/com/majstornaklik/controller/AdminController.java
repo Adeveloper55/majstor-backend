@@ -5,10 +5,12 @@ import com.majstornaklik.dto.AdminCreateJobRequest;
 import com.majstornaklik.dto.AdjustTokensRequest;
 import com.majstornaklik.dto.DtoMapper;
 import com.majstornaklik.dto.ContactMessageDto;
+import com.majstornaklik.dto.CompanyRegistrationDto;
 import com.majstornaklik.dto.RejectTokenRequest;
 import com.majstornaklik.entity.Review;
 import com.majstornaklik.service.AdminService;
 import com.majstornaklik.service.ApplicationService;
+import com.majstornaklik.service.CompanyRegistrationService;
 import com.majstornaklik.service.ContactService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,7 @@ public class AdminController {
     private final AdminService adminService;
     private final ContactService contactService;
     private final ApplicationService applicationService;
+    private final CompanyRegistrationService companyRegistrationService;
 
     @GetMapping("/users")
     public Page<DtoMapper.UserDto> listUsers(@RequestParam(required = false) String search, Pageable pageable) {
@@ -162,5 +165,29 @@ public class AdminController {
     @DeleteMapping("/contact-messages/{id}")
     public void deleteContactMessage(@PathVariable UUID id) {
         contactService.delete(id);
+    }
+
+    @GetMapping("/company-registrations")
+    public Page<CompanyRegistrationDto> listCompanyRegistrations(
+            @RequestParam(required = false) String status,
+            Pageable pageable) {
+        return companyRegistrationService.listForAdmin(status, pageable);
+    }
+
+    @GetMapping("/company-registrations/{id}")
+    public CompanyRegistrationDto getCompanyRegistration(@PathVariable UUID id) {
+        return companyRegistrationService.get(id);
+    }
+
+    @PostMapping("/company-registrations/{id}/approve")
+    public CompanyRegistrationDto approveCompanyRegistration(@PathVariable UUID id) {
+        return companyRegistrationService.approve(id);
+    }
+
+    @PostMapping("/company-registrations/{id}/reject")
+    public CompanyRegistrationDto rejectCompanyRegistration(
+            @PathVariable UUID id,
+            @RequestBody(required = false) RejectTokenRequest req) {
+        return companyRegistrationService.reject(id, req != null ? req.adminNote() : null);
     }
 }

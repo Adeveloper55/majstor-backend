@@ -59,6 +59,32 @@ public class Handyman {
     @Builder.Default
     private Integer totalReviews = 0;
 
+    @Column(name = "company_name", length = 200)
+    private String companyName;
+
+    @Column(length = 9)
+    private String pib;
+
+    private String address;
+
+    @Column(name = "postal_code", length = 20)
+    private String postalCode;
+
+    private String country;
+
+    @Column(name = "contact_person", length = 100)
+    private String contactPerson;
+
+    @Column(name = "is_company")
+    @Builder.Default
+    private Boolean isCompany = false;
+
+    @Column(name = "coverage_districts", columnDefinition = "TEXT")
+    private String coverageDistrictsJson;
+
+    @Column(name = "service_categories", columnDefinition = "TEXT")
+    private String serviceCategoriesJson;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
