@@ -13,6 +13,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.majstornaklik.util.PibUtils;
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
@@ -29,6 +31,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
+    private final HandymanCategoryService handymanCategoryService;
 
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
@@ -56,6 +59,12 @@ public class AuthService {
         if (userRepository.existsByEmail(req.email()) || handymanRepository.existsByEmail(req.email())) {
             throw new IllegalArgumentException("Email je već registrovan");
         }
+        String pib = PibUtils.normalize(req.pib());
+        PibUtils.validate(pib);
+        if (handymanRepository.existsByPib(pib)) {
+            throw new IllegalArgumentException("PIB je već registrovan");
+        }
+        String categoryIdsJson = handymanCategoryService.toJson(req.categoryIds());
         Handyman handyman = Handyman.builder()
                 .fullName(req.fullName())
                 .email(req.email())
@@ -63,6 +72,8 @@ public class AuthService {
                 .phone(req.phone())
                 .city(req.city())
                 .bio(req.bio())
+                .pib(pib)
+                .categoryIdsJson(categoryIdsJson)
                 .build();
         handymanRepository.save(handyman);
         emailService.send(handyman.getEmail(), "Dobrodošli na Majstor na klik",

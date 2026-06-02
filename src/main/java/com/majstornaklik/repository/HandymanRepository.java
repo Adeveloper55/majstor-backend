@@ -11,5 +11,7 @@ import java.util.UUID;
 public interface HandymanRepository extends JpaRepository<Handyman, UUID> {
     Optional<Handyman> findByEmail(String email);
     boolean existsByEmail(String email);
+    boolean existsByPib(String pib);
+    boolean existsByPibAndIdNot(String pib, UUID id);
     Page<Handyman> findByFullNameContainingIgnoreCaseOrEmailContainingIgnoreCase(String fullName, String email, Pageable pageable);
 }

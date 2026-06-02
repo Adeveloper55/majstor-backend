@@ -13,6 +13,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.majstornaklik.util.PibUtils;
+
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
@@ -83,6 +85,10 @@ public class AdminService {
         if (userRepository.existsByEmail(req.email()) || handymanRepository.existsByEmail(req.email())) {
             throw new IllegalArgumentException("Email je već registrovan");
         }
+        String pib = PibUtils.normalizeOptional(req.pib());
+        if (pib != null && handymanRepository.existsByPib(pib)) {
+            throw new IllegalArgumentException("PIB je već registrovan");
+        }
         Handyman handyman = Handyman.builder()
                 .fullName(req.fullName())
                 .email(req.email())
@@ -90,6 +96,7 @@ public class AdminService {
                 .phone(req.phone())
                 .city(req.city())
                 .bio(req.bio())
+                .pib(pib)
                 .build();
         handymanRepository.save(handyman);
         if (req.initialTokens() != null && req.initialTokens() > 0) {

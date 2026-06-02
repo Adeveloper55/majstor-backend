@@ -6,6 +6,7 @@ import com.majstornaklik.dto.DtoMapper;
 import com.majstornaklik.dto.ScorePreviewRequest;
 import com.majstornaklik.dto.ScorePreviewResponse;
 import com.majstornaklik.entity.Category;
+import com.majstornaklik.entity.Handyman;
 import com.majstornaklik.entity.JobListing;
 import com.majstornaklik.repository.CategoryRepository;
 import com.majstornaklik.repository.HandymanRepository;
@@ -36,6 +37,7 @@ public class JobService {
     private final HandymanRepository handymanRepository;
     private final AiScoringService aiScoringService;
     private final EmailService emailService;
+    private final HandymanCategoryService handymanCategoryService;
 
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
@@ -78,6 +80,11 @@ public class JobService {
                                           UUID viewerId, String viewerRole) {
         JobListing job = jobListingRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Posao nije pronađen"));
+        if ("ROLE_HANDYMAN".equals(viewerRole) && viewerId != null && "OPEN".equals(job.getStatus())) {
+            Handyman handyman = handymanRepository.findById(viewerId)
+                    .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
+            handymanCategoryService.assertCanAccessJobCategory(handyman, job.getCategory().getId());
+        }
         Double distance = computeDistance(job, userLat, userLon);
         if (radiusKm != null && distance != null && distance > radiusKm) {
             throw new IllegalArgumentException("Posao nije u zadatom radijusu");
@@ -122,13 +129,31 @@ public class JobService {
     public Page<DtoMapper.JobListingDto> listJobs(String status, Integer categoryId, List<Integer> categoryIds,
                                                    String city, Double userLat, Double userLon, Double radiusKm,
                                                    Integer minTokenCost, Integer maxTokenCost, String sort,
-                                                   Pageable pageable) {
+                                                   Pageable pageable, List<Integer> restrictedCategoryIds) {
         String jobStatus = status != null ? status : "OPEN";
         List<Integer> filterCategories = categoryIds != null && !categoryIds.isEmpty()
                 ? categoryIds
                 : (categoryId != null ? List.of(categoryId) : null);
 
-        boolean needsMemoryProcessing = filterCategories != null
+        if (restrictedCategoryIds != null) {
+            if (restrictedCategoryIds.isEmpty()) {
+                return Page.empty(pageable);
+            }
+            if (filterCategories == null) {
+                filterCategories = restrictedCategoryIds;
+            } else {
+                filterCategories = filterCategories.stream()
+                        .filter(restrictedCategoryIds::contains)
+                        .toList();
+                if (filterCategories.isEmpty()) {
+                    return Page.empty(pageable);
+                }
+            }
+        }
+
+        final List<Integer> effectiveFilterCategories = filterCategories;
+
+        boolean needsMemoryProcessing = effectiveFilterCategories != null
                 || minTokenCost != null || maxTokenCost != null
                 || (radiusKm != null && userLat != null && userLon != null)
                 || "closest".equalsIgnoreCase(sort) || "lowest_cost".equalsIgnoreCase(sort);
@@ -146,7 +171,7 @@ public class JobService {
 
         List<DtoMapper.JobListingDto> items = source.stream()
                 .map(j -> DtoMapper.toJobDto(j, computeDistance(j, userLat, userLon)))
-                .filter(dto -> filterCategories == null || filterCategories.contains(dto.categoryId()))
+                .filter(dto -> effectiveFilterCategories == null || effectiveFilterCategories.contains(dto.categoryId()))
                 .filter(dto -> minTokenCost == null || dto.tokenCost() >= minTokenCost)
                 .filter(dto -> maxTokenCost == null || dto.tokenCost() <= maxTokenCost)
                 .filter(dto -> radiusKm == null || userLat == null || userLon == null

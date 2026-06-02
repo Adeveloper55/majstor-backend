@@ -16,7 +16,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.majstornaklik.util.PibUtils;
+
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -28,6 +31,7 @@ public class CompanyRegistrationService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final HandymanCategoryService handymanCategoryService;
 
     @Transactional
     public CompanyRegistrationSubmitResponse submit(RegisterCompanyRequest req) {
@@ -36,6 +40,10 @@ public class CompanyRegistrationService {
         }
         if (repository.existsByEmailAndStatus(req.email(), "PENDING")) {
             throw new IllegalArgumentException("Već postoji prijava na čekanju za ovaj email");
+        }
+        String pib = PibUtils.normalize(req.pib());
+        if (handymanRepository.existsByPib(pib)) {
+            throw new IllegalArgumentException("PIB je već registrovan");
         }
 
         CompanyRegistrationRequest entity = CompanyRegistrationRequest.builder()
@@ -47,7 +55,7 @@ public class CompanyRegistrationService {
                 .companyShortDescription(req.companyShortDescription())
                 .selectedDistricts(JsonUtils.toJson(req.selectedDistricts()))
                 .companyName(req.companyName().trim())
-                .pib(req.pib().trim())
+                .pib(pib)
                 .address(req.address().trim())
                 .postalCode(req.postalCode().trim())
                 .city(req.city().trim())
@@ -95,8 +103,17 @@ public class CompanyRegistrationService {
         if (userRepository.existsByEmail(req.getEmail()) || handymanRepository.existsByEmail(req.getEmail())) {
             throw new IllegalArgumentException("Email je već registrovan u sistemu");
         }
+        if (handymanRepository.existsByPib(req.getPib())) {
+            throw new IllegalArgumentException("PIB je već registrovan u sistemu");
+        }
 
         String bio = buildBio(req);
+
+        List<String> serviceNames = JsonUtils.parseStringList(req.getSelectedServiceNames());
+        List<Integer> categoryIds = handymanCategoryService.resolveCategoryIdsFromNames(serviceNames);
+        if (categoryIds.isEmpty()) {
+            throw new IllegalArgumentException("Nije moguće mapirati izabrane usluge na kategorije poslova.");
+        }
 
         Handyman handyman = Handyman.builder()
                 .fullName(req.getCompanyName())
@@ -115,6 +132,7 @@ public class CompanyRegistrationService {
                 .isVerified(true)
                 .coverageDistrictsJson(req.getSelectedDistricts())
                 .serviceCategoriesJson(req.getSelectedServiceNames())
+                .categoryIdsJson(handymanCategoryService.toJson(categoryIds))
                 .build();
 
         handymanRepository.save(handyman);

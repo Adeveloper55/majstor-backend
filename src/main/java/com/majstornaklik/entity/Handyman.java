@@ -85,6 +85,9 @@ public class Handyman {
     @Column(name = "service_categories", columnDefinition = "TEXT")
     private String serviceCategoriesJson;
 
+    @Column(name = "category_ids", columnDefinition = "TEXT")
+    private String categoryIdsJson;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

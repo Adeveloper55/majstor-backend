@@ -1,0 +1,1 @@
+ALTER TABLE handymen ADD COLUMN IF NOT EXISTS category_ids TEXT;

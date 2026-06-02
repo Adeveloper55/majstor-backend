@@ -12,5 +12,6 @@ public record AdminCreateHandymanRequest(
         String phone,
         String city,
         String bio,
+        String pib,
         @Min(0) Integer initialTokens
 ) {}

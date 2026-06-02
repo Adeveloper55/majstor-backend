@@ -3,7 +3,10 @@ package com.majstornaklik.dto;
 import com.majstornaklik.entity.*;
 import com.majstornaklik.security.UserPrincipal;
 
+import com.majstornaklik.util.JsonUtils;
+
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public final class DtoMapper {
@@ -17,9 +20,13 @@ public final class DtoMapper {
     }
 
     public static HandymanDto toHandymanDto(Handyman h) {
-        return new HandymanDto(h.getId(), h.getFullName(), h.getEmail(), h.getPhone(), h.getCity(),
+        return new HandymanDto(
+                h.getId(), h.getFullName(), h.getEmail(), h.getPhone(), h.getCity(),
                 h.getLatitude(), h.getLongitude(), h.getBio(), h.getProfileImageUrl(),
-                h.getIsVerified(), h.getTokenBalance(), h.getAverageRating(), h.getTotalReviews(), h.getCreatedAt());
+                h.getIsVerified(), h.getTokenBalance(), h.getAverageRating(), h.getTotalReviews(),
+                h.getCompanyName(), h.getPib(), h.getAddress(), h.getPostalCode(), h.getCountry(),
+                h.getContactPerson(), h.getIsCompany(),
+                JsonUtils.parseIntegerList(h.getCategoryIdsJson()), h.getCreatedAt());
     }
 
     public static HandymanPublicDto toHandymanPublicDto(Handyman h) {
@@ -54,7 +61,9 @@ public final class DtoMapper {
     public record HandymanDto(UUID id, String fullName, String email, String phone, String city,
                               Double latitude, Double longitude, String bio, String profileImageUrl,
                               Boolean isVerified, Integer tokenBalance, Double averageRating,
-                              Integer totalReviews, Instant createdAt) {}
+                              Integer totalReviews, String companyName, String pib, String address,
+                              String postalCode, String country, String contactPerson, Boolean isCompany,
+                              List<Integer> categoryIds, Instant createdAt) {}
 
     public record HandymanPublicDto(UUID id, String fullName, String city, String bio,
                                    String profileImageUrl, Boolean isVerified,

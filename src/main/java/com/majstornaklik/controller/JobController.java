@@ -1,9 +1,11 @@
 package com.majstornaklik.controller;
 
 import com.majstornaklik.dto.*;
-import com.majstornaklik.repository.CategoryRepository;
+import com.majstornaklik.entity.Handyman;
+import com.majstornaklik.repository.*;
 import com.majstornaklik.security.SecurityUtils;
 import com.majstornaklik.service.ApplicationService;
+import com.majstornaklik.service.HandymanCategoryService;
 import com.majstornaklik.service.JobService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,8 @@ public class JobController {
     private final JobService jobService;
     private final ApplicationService applicationService;
     private final SecurityUtils securityUtils;
+    private final HandymanRepository handymanRepository;
+    private final HandymanCategoryService handymanCategoryService;
 
     @GetMapping
     public Page<DtoMapper.JobListingDto> listJobs(
@@ -37,8 +41,15 @@ public class JobController {
             @RequestParam(required = false) Integer maxTokenCost,
             @RequestParam(required = false, defaultValue = "newest") String sort,
             Pageable pageable) {
+        List<Integer> restrictedCategories = null;
+        var viewer = securityUtils.getCurrentUserOrNull();
+        if (viewer != null && "ROLE_HANDYMAN".equals(viewer.getRole())) {
+            Handyman handyman = handymanRepository.findById(viewer.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
+            restrictedCategories = handymanCategoryService.getCategoryIds(handyman);
+        }
         return jobService.listJobs(status, category, categories, city, lat, lon, radius,
-                minTokenCost, maxTokenCost, sort, pageable);
+                minTokenCost, maxTokenCost, sort, pageable, restrictedCategories);
     }
 
     @GetMapping("/{id}")

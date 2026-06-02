@@ -25,6 +25,7 @@ public class ApplicationService {
     private final UserRepository userRepository;
     private final TokenTransactionRepository tokenTransactionRepository;
     private final EmailService emailService;
+    private final HandymanCategoryService handymanCategoryService;
 
     @Transactional
     public Map<String, Object> apply(UUID handymanId, UUID jobId, ApplyJobRequest req) {
@@ -39,6 +40,7 @@ public class ApplicationService {
 
         Handyman handyman = handymanRepository.findById(handymanId)
                 .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
+        handymanCategoryService.assertCanAccessJobCategory(handyman, job.getCategory().getId());
         if (handyman.getTokenBalance() < job.getTokenCost()) {
             throw new IllegalArgumentException("Nemate dovoljno tokena za ovaj posao. Pošaljite zahtev za dopunu.");
         }

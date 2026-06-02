@@ -3,8 +3,10 @@ package com.majstornaklik.controller;
 import com.majstornaklik.dto.DtoMapper;
 import com.majstornaklik.entity.Handyman;
 import com.majstornaklik.repository.HandymanRepository;
+import com.majstornaklik.repository.HandymanRepository;
 import com.majstornaklik.security.SecurityUtils;
 import com.majstornaklik.service.ApplicationService;
+import com.majstornaklik.service.HandymanCategoryService;
 import com.majstornaklik.service.JobService;
 import com.majstornaklik.service.TokenService;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +14,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 
+import com.majstornaklik.util.PibUtils;
+
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,6 +30,7 @@ public class HandymanController {
     private final TokenService tokenService;
     private final ApplicationService applicationService;
     private final JobService jobService;
+    private final HandymanCategoryService handymanCategoryService;
 
     @GetMapping("/me")
     public DtoMapper.HandymanDto getMe() {
@@ -43,13 +49,44 @@ public class HandymanController {
         if (body.containsKey("profileImageUrl")) h.setProfileImageUrl((String) body.get("profileImageUrl"));
         if (body.containsKey("latitude")) h.setLatitude(toDouble(body.get("latitude")));
         if (body.containsKey("longitude")) h.setLongitude(toDouble(body.get("longitude")));
+        if (body.containsKey("companyName")) h.setCompanyName(trimOrNull((String) body.get("companyName")));
+        if (body.containsKey("address")) h.setAddress(trimOrNull((String) body.get("address")));
+        if (body.containsKey("postalCode")) h.setPostalCode(trimOrNull((String) body.get("postalCode")));
+        if (body.containsKey("country")) h.setCountry(trimOrNull((String) body.get("country")));
+        if (body.containsKey("contactPerson")) h.setContactPerson(trimOrNull((String) body.get("contactPerson")));
+        if (body.containsKey("pib")) {
+            String pib = PibUtils.normalize((String) body.get("pib"));
+            PibUtils.validate(pib);
+            if (handymanRepository.existsByPibAndIdNot(pib, h.getId())) {
+                throw new IllegalArgumentException("PIB je već registrovan");
+            }
+            h.setPib(pib);
+        }
+        if (body.containsKey("categoryIds")) {
+            h.setCategoryIdsJson(handymanCategoryService.toJson(parseCategoryIds(body.get("categoryIds"))));
+        }
         return DtoMapper.toHandymanDto(handymanRepository.save(h));
+    }
+
+    private List<Integer> parseCategoryIds(Object value) {
+        if (!(value instanceof List<?> list)) {
+            throw new IllegalArgumentException("categoryIds mora biti lista");
+        }
+        return list.stream()
+                .map(item -> item instanceof Number n ? n.intValue() : Integer.parseInt(item.toString()))
+                .toList();
     }
 
     private Double toDouble(Object value) {
         if (value == null) return null;
         if (value instanceof Number n) return n.doubleValue();
         return Double.parseDouble(value.toString());
+    }
+
+    private String trimOrNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @GetMapping("/{id}")

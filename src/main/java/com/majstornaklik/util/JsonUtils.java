@@ -31,4 +31,23 @@ public final class JsonUtils {
             return Collections.emptyList();
         }
     }
+
+    public static String toJsonIntegers(List<Integer> list) {
+        try {
+            return MAPPER.writeValueAsString(list != null ? list : List.of());
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Greška pri serializaciji JSON-a", e);
+        }
+    }
+
+    public static List<Integer> parseIntegerList(String json) {
+        if (json == null || json.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            return MAPPER.readValue(json, new TypeReference<>() {});
+        } catch (JsonProcessingException e) {
+            return Collections.emptyList();
+        }
+    }
 }
