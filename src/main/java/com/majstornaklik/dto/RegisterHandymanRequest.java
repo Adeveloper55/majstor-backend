@@ -3,7 +3,6 @@ package com.majstornaklik.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
@@ -15,6 +14,6 @@ public record RegisterHandymanRequest(
         String phone,
         String city,
         String bio,
-        @NotBlank @Pattern(regexp = "\\d{9}", message = "PIB mora imati 9 cifara") String pib,
+        String pib,
         @NotEmpty @Size(min = 1, max = 10) List<Integer> categoryIds
 ) {}

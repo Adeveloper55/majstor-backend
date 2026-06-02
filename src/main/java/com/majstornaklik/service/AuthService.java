@@ -59,9 +59,8 @@ public class AuthService {
         if (userRepository.existsByEmail(req.email()) || handymanRepository.existsByEmail(req.email())) {
             throw new IllegalArgumentException("Email je već registrovan");
         }
-        String pib = PibUtils.normalize(req.pib());
-        PibUtils.validate(pib);
-        if (handymanRepository.existsByPib(pib)) {
+        String pib = PibUtils.normalizeOptional(req.pib());
+        if (pib != null && handymanRepository.existsByPib(pib)) {
             throw new IllegalArgumentException("PIB je već registrovan");
         }
         String categoryIdsJson = handymanCategoryService.toJson(req.categoryIds());

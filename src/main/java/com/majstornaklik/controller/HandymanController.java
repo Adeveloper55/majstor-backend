@@ -55,9 +55,8 @@ public class HandymanController {
         if (body.containsKey("country")) h.setCountry(trimOrNull((String) body.get("country")));
         if (body.containsKey("contactPerson")) h.setContactPerson(trimOrNull((String) body.get("contactPerson")));
         if (body.containsKey("pib")) {
-            String pib = PibUtils.normalize((String) body.get("pib"));
-            PibUtils.validate(pib);
-            if (handymanRepository.existsByPibAndIdNot(pib, h.getId())) {
+            String pib = PibUtils.normalizeOptional((String) body.get("pib"));
+            if (pib != null && handymanRepository.existsByPibAndIdNot(pib, h.getId())) {
                 throw new IllegalArgumentException("PIB je već registrovan");
             }
             h.setPib(pib);
