@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.majstornaklik.util.PibUtils;
+import com.majstornaklik.util.PhoneUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -32,6 +33,8 @@ public class CompanyRegistrationService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final HandymanCategoryService handymanCategoryService;
+    private final EmailVerificationService emailVerificationService;
+    private final PhoneUniquenessService phoneUniquenessService;
 
     @Transactional
     public CompanyRegistrationSubmitResponse submit(RegisterCompanyRequest req) {
@@ -45,11 +48,16 @@ public class CompanyRegistrationService {
         if (handymanRepository.existsByPib(pib)) {
             throw new IllegalArgumentException("PIB je već registrovan");
         }
+        String normalizedPhone = PhoneUtils.normalizeOptional(req.normalizedPhone());
+        if (normalizedPhone == null) {
+            throw new IllegalArgumentException("Unesite ispravan srpski mobilni broj.");
+        }
+        phoneUniquenessService.assertPhoneAvailable(normalizedPhone, null, null, null);
 
         CompanyRegistrationRequest entity = CompanyRegistrationRequest.builder()
                 .email(req.email().trim().toLowerCase())
                 .phone(req.phone().trim())
-                .normalizedPhone(req.normalizedPhone().trim())
+                .normalizedPhone(normalizedPhone)
                 .selectedServiceIds(JsonUtils.toJson(req.selectedServiceIds()))
                 .selectedServiceNames(JsonUtils.toJson(req.selectedServiceNames()))
                 .companyShortDescription(req.companyShortDescription())
@@ -67,23 +75,22 @@ public class CompanyRegistrationService {
 
         repository.save(entity);
 
-        emailService.send("admin@majstornaklik.rs", "Nova registracija preduzeća",
-                "Preduzeće: " + entity.getCompanyName() + "\nEmail: " + entity.getEmail()
-                        + "\nKontakt: " + entity.getContactPerson() + "\nTelefon: " + entity.getNormalizedPhone());
+        emailVerificationService.sendVerificationEmail(
+                entity.getEmail(), EmailVerificationService.ROLE_COMPANY, entity.getId());
 
         return new CompanyRegistrationSubmitResponse(
                 entity.getId().toString(),
                 "PENDING",
-                "Prijava je poslata. Admin će pregledati i odobriti registraciju."
+                "Proverite email i kliknite na link za potvrdu. Admin pregleda prijavu tek nakon potvrde emaila."
         );
     }
 
     public Page<CompanyRegistrationDto> listForAdmin(String status, Pageable pageable) {
         if (status != null && !status.isBlank()) {
-            return repository.findByStatusOrderByCreatedAtDesc(status, pageable)
+            return repository.findByStatusAndEmailVerifiedTrueOrderByCreatedAtDesc(status, pageable)
                     .map(CompanyRegistrationDto::from);
         }
-        return repository.findAllByOrderByCreatedAtDesc(pageable).map(CompanyRegistrationDto::from);
+        return repository.findByEmailVerifiedTrueOrderByCreatedAtDesc(pageable).map(CompanyRegistrationDto::from);
     }
 
     public CompanyRegistrationDto get(UUID id) {
@@ -99,6 +106,9 @@ public class CompanyRegistrationService {
 
         if (!"PENDING".equals(req.getStatus())) {
             throw new IllegalArgumentException("Prijava je već obrađena");
+        }
+        if (!Boolean.TRUE.equals(req.getEmailVerified())) {
+            throw new IllegalArgumentException("Email preduzeća nije potvrđen.");
         }
         if (userRepository.existsByEmail(req.getEmail()) || handymanRepository.existsByEmail(req.getEmail())) {
             throw new IllegalArgumentException("Email je već registrovan u sistemu");
@@ -120,6 +130,7 @@ public class CompanyRegistrationService {
                 .email(req.getEmail())
                 .passwordHash(req.getPasswordHash())
                 .phone(req.getNormalizedPhone())
+                .phoneNormalized(req.getNormalizedPhone())
                 .city(req.getCity())
                 .bio(bio)
                 .companyName(req.getCompanyName())
@@ -130,6 +141,7 @@ public class CompanyRegistrationService {
                 .contactPerson(req.getContactPerson())
                 .isCompany(true)
                 .isVerified(true)
+                .emailVerified(true)
                 .coverageDistrictsJson(req.getSelectedDistricts())
                 .serviceCategoriesJson(req.getSelectedServiceNames())
                 .categoryIdsJson(handymanCategoryService.toJson(categoryIds))

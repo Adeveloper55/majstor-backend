@@ -32,7 +32,7 @@ public class ContactService {
         repository.save(message);
 
         String type = Boolean.TRUE.equals(req.isContractor()) ? "majstor/izvođač" : "korisnik";
-        emailService.send("admin@majstornaklik.rs", "Nova kontakt poruka",
+        emailService.sendToAdmin("Nova kontakt poruka",
                 "Od: " + req.fullName() + " (" + type + ")\nEmail: " + req.email() + "\n\n" + req.message());
 
         return ContactMessageDto.from(message);

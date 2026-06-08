@@ -13,5 +13,7 @@ public interface HandymanRepository extends JpaRepository<Handyman, UUID> {
     boolean existsByEmail(String email);
     boolean existsByPib(String pib);
     boolean existsByPibAndIdNot(String pib, UUID id);
+    boolean existsByPhoneNormalized(String phoneNormalized);
+    boolean existsByPhoneNormalizedAndIdNot(String phoneNormalized, UUID id);
     Page<Handyman> findByFullNameContainingIgnoreCaseOrEmailContainingIgnoreCase(String fullName, String email, Pageable pageable);
 }

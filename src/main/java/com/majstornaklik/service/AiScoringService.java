@@ -28,7 +28,7 @@ public class AiScoringService {
 
     public AiScoreResult scoreJob(String categoryName, String description) {
         if (apiKey == null || apiKey.isBlank()) {
-            return new AiScoreResult(2, "Podrazumevana ocena (AI nije konfigurisan)");
+            return new AiScoreResult(2, "Standardna složenost posla");
         }
 
         String prompt = """
@@ -71,7 +71,7 @@ public class AiScoringService {
             return new AiScoreResult(score, reason);
         } catch (Exception e) {
             log.warn("AI scoring failed, using fallback: {}", e.getMessage());
-            return new AiScoreResult(2, "Podrazumevana ocena (AI greška)");
+            return new AiScoreResult(2, "Standardna složenost posla");
         }
     }
 }

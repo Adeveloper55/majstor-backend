@@ -1,4 +1,15 @@
-# Kopiraj u application-local.properties i podesi svoju PostgreSQL lozinku:
+# Kopiraj u application-local.properties i podesi:
 #   copy application-local.properties.example application-local.properties
-#
+
 spring.datasource.password=YOUR_POSTGRES_PASSWORD
+
+# SMTP (Webhosting Srbija cPanel)
+spring.mail.host=mail.tvojmajstornaklik.com
+spring.mail.port=587
+spring.mail.username=contact@tvojmajstornaklik.com
+spring.mail.password=YOUR_MAIL_PASSWORD
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+
+app.mail.from=contact@tvojmajstornaklik.com
+app.mail.admin=contact@tvojmajstornaklik.com

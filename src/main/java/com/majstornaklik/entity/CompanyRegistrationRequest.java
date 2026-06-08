@@ -82,4 +82,8 @@ public class CompanyRegistrationRequest {
 
     @Column(name = "reviewed_at")
     private Instant reviewedAt;
+
+    @Column(name = "email_verified")
+    @Builder.Default
+    private Boolean emailVerified = false;
 }

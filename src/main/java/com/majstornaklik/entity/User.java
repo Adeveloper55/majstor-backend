@@ -31,6 +31,10 @@ public class User {
     private String passwordHash;
 
     private String phone;
+
+    @Column(name = "phone_normalized", length = 30)
+    private String phoneNormalized;
+
     private String address;
     private String city;
     private Double latitude;
@@ -42,6 +46,10 @@ public class User {
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;
+
+    @Column(name = "email_verified")
+    @Builder.Default
+    private Boolean emailVerified = false;
 
     @Column(name = "average_rating")
     @Builder.Default

@@ -4,6 +4,8 @@ import com.majstornaklik.dto.DtoMapper;
 import com.majstornaklik.entity.User;
 import com.majstornaklik.repository.UserRepository;
 import com.majstornaklik.security.SecurityUtils;
+import com.majstornaklik.service.PhoneUniquenessService;
+import com.majstornaklik.util.PhoneUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +19,7 @@ public class UserController {
 
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
+    private final PhoneUniquenessService phoneUniquenessService;
 
     @GetMapping("/me")
     public DtoMapper.UserDto getMe() {
@@ -54,7 +57,12 @@ public class UserController {
 
     private void updateFields(User user, Map<String, Object> body) {
         if (body.containsKey("fullName")) user.setFullName((String) body.get("fullName"));
-        if (body.containsKey("phone")) user.setPhone((String) body.get("phone"));
+        if (body.containsKey("phone")) {
+            String phoneNormalized = PhoneUtils.normalizeOptional((String) body.get("phone"));
+            phoneUniquenessService.assertPhoneAvailable(phoneNormalized, user.getId(), null, null);
+            user.setPhone(phoneNormalized);
+            user.setPhoneNormalized(phoneNormalized);
+        }
         if (body.containsKey("city")) user.setCity((String) body.get("city"));
         if (body.containsKey("address")) user.setAddress((String) body.get("address"));
         if (body.containsKey("profileImageUrl")) user.setProfileImageUrl((String) body.get("profileImageUrl"));

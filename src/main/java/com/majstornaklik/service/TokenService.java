@@ -34,6 +34,9 @@ public class TokenService {
     @Value("${app.company.name}")
     private String companyName;
 
+    @Value("${app.company.pib:}")
+    private String companyPib;
+
     @Value("${app.company.bank-name}")
     private String bankName;
 
@@ -50,6 +53,7 @@ public class TokenService {
     public Map<String, String> getBankDetails() {
         return Map.of(
                 "companyName", companyName,
+                "companyPib", companyPib,
                 "bankName", bankName,
                 "bankAccount", bankAccount,
                 "paymentInstructions", paymentInstructions

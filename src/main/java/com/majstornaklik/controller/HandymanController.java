@@ -3,11 +3,11 @@ package com.majstornaklik.controller;
 import com.majstornaklik.dto.DtoMapper;
 import com.majstornaklik.entity.Handyman;
 import com.majstornaklik.repository.HandymanRepository;
-import com.majstornaklik.repository.HandymanRepository;
 import com.majstornaklik.security.SecurityUtils;
 import com.majstornaklik.service.ApplicationService;
 import com.majstornaklik.service.HandymanCategoryService;
 import com.majstornaklik.service.JobService;
+import com.majstornaklik.service.PhoneUniquenessService;
 import com.majstornaklik.service.TokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -15,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 
 import com.majstornaklik.util.PibUtils;
+import com.majstornaklik.util.PhoneUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,7 @@ public class HandymanController {
     private final ApplicationService applicationService;
     private final JobService jobService;
     private final HandymanCategoryService handymanCategoryService;
+    private final PhoneUniquenessService phoneUniquenessService;
 
     @GetMapping("/me")
     public DtoMapper.HandymanDto getMe() {
@@ -43,7 +45,12 @@ public class HandymanController {
         securityUtils.requireRole("ROLE_HANDYMAN");
         Handyman h = getCurrent();
         if (body.containsKey("fullName")) h.setFullName((String) body.get("fullName"));
-        if (body.containsKey("phone")) h.setPhone((String) body.get("phone"));
+        if (body.containsKey("phone")) {
+            String phoneNormalized = PhoneUtils.normalizeOptional((String) body.get("phone"));
+            phoneUniquenessService.assertPhoneAvailable(phoneNormalized, null, h.getId(), null);
+            h.setPhone(phoneNormalized);
+            h.setPhoneNormalized(phoneNormalized);
+        }
         if (body.containsKey("city")) h.setCity((String) body.get("city"));
         if (body.containsKey("bio")) h.setBio((String) body.get("bio"));
         if (body.containsKey("profileImageUrl")) h.setProfileImageUrl((String) body.get("profileImageUrl"));

@@ -6,6 +6,7 @@ import com.majstornaklik.repository.*;
 import com.majstornaklik.security.JwtService;
 import com.majstornaklik.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.majstornaklik.util.PibUtils;
+import com.majstornaklik.util.PhoneUtils;
 
 import java.time.Instant;
 import java.util.Map;
@@ -21,6 +23,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -32,30 +35,37 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
     private final HandymanCategoryService handymanCategoryService;
+    private final EmailVerificationService emailVerificationService;
+    private final PhoneUniquenessService phoneUniquenessService;
 
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
     @Transactional
-    public AuthResponse registerClient(RegisterClientRequest req) {
+    public RegisterPendingResponse registerClient(RegisterClientRequest req) {
         if (userRepository.existsByEmail(req.email()) || handymanRepository.existsByEmail(req.email())) {
             throw new IllegalArgumentException("Email je već registrovan");
         }
+        String phoneNormalized = PhoneUtils.normalizeOptional(req.phone());
+        phoneUniquenessService.assertPhoneAvailable(phoneNormalized, null, null, null);
         User user = User.builder()
                 .fullName(req.fullName())
-                .email(req.email())
+                .email(req.email().trim().toLowerCase())
                 .passwordHash(passwordEncoder.encode(req.password()))
-                .phone(req.phone())
+                .phone(phoneNormalized)
+                .phoneNormalized(phoneNormalized)
                 .city(req.city())
+                .emailVerified(false)
                 .build();
         userRepository.save(user);
-        emailService.send(user.getEmail(), "Dobrodošli na Majstor na klik",
-                "Uspešno ste registrovani kao klijent.");
-        return loginInternal(user.getEmail(), req.password());
+        emailVerificationService.sendVerificationEmail(user.getEmail(), EmailVerificationService.ROLE_CLIENT, null);
+        return new RegisterPendingResponse(
+                "Registracija uspešna. Proverite email i kliknite na link za potvrdu pre prijave.",
+                user.getEmail());
     }
 
     @Transactional
-    public AuthResponse registerHandyman(RegisterHandymanRequest req) {
+    public RegisterPendingResponse registerHandyman(RegisterHandymanRequest req) {
         if (userRepository.existsByEmail(req.email()) || handymanRepository.existsByEmail(req.email())) {
             throw new IllegalArgumentException("Email je već registrovan");
         }
@@ -64,30 +74,37 @@ public class AuthService {
             throw new IllegalArgumentException("PIB je već registrovan");
         }
         String categoryIdsJson = handymanCategoryService.toJson(req.categoryIds());
+        String phoneNormalized = PhoneUtils.normalizeOptional(req.phone());
+        phoneUniquenessService.assertPhoneAvailable(phoneNormalized, null, null, null);
         Handyman handyman = Handyman.builder()
                 .fullName(req.fullName())
-                .email(req.email())
+                .email(req.email().trim().toLowerCase())
                 .passwordHash(passwordEncoder.encode(req.password()))
-                .phone(req.phone())
+                .phone(phoneNormalized)
+                .phoneNormalized(phoneNormalized)
                 .city(req.city())
                 .bio(req.bio())
                 .pib(pib)
                 .categoryIdsJson(categoryIdsJson)
+                .emailVerified(false)
                 .build();
         handymanRepository.save(handyman);
-        emailService.send(handyman.getEmail(), "Dobrodošli na Majstor na klik",
-                "Uspešno ste registrovani kao majstor.");
-        return loginInternal(handyman.getEmail(), req.password());
+        emailVerificationService.sendVerificationEmail(handyman.getEmail(), EmailVerificationService.ROLE_HANDYMAN, null);
+        return new RegisterPendingResponse(
+                "Registracija uspešna. Proverite email i kliknite na link za potvrdu pre prijave.",
+                handyman.getEmail());
     }
 
     public AuthResponse login(LoginRequest req) {
-        return loginInternal(req.email(), req.password());
+        return loginInternal(req.email().trim().toLowerCase(), req.password());
     }
 
     private AuthResponse loginInternal(String email, String password) {
         var auth = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(email, password));
         UserPrincipal principal = (UserPrincipal) auth.getPrincipal();
+
+        assertEmailVerified(email, principal.getRole());
 
         String token = jwtService.generateToken(principal);
         Object userDto = switch (principal.getRole()) {
@@ -100,7 +117,25 @@ public class AuthService {
         return DtoMapper.buildAuthResponse(token, principal, userDto);
     }
 
+    private void assertEmailVerified(String email, String role) {
+        if ("ROLE_CLIENT".equals(role)) {
+            User user = userRepository.findByEmail(email).orElseThrow();
+            if (!Boolean.TRUE.equals(user.getEmailVerified())) {
+                throw new IllegalStateException(
+                        "Email nije potvrđen. Proverite inbox i kliknite na link za verifikaciju.");
+            }
+        }
+        if ("ROLE_HANDYMAN".equals(role)) {
+            Handyman handyman = handymanRepository.findByEmail(email).orElseThrow();
+            if (!Boolean.TRUE.equals(handyman.getEmailVerified())) {
+                throw new IllegalStateException(
+                        "Email nije potvrđen. Proverite inbox i kliknite na link za verifikaciju.");
+            }
+        }
+    }
+
     public AuthResponse refresh(UserPrincipal principal) {
+        assertEmailVerified(principal.getEmail(), principal.getRole());
         String token = jwtService.generateToken(principal);
         String email = principal.getEmail();
         Object userDto = switch (principal.getRole()) {
@@ -112,22 +147,39 @@ public class AuthService {
         return DtoMapper.buildAuthResponse(token, principal, userDto);
     }
 
+    public EmailVerificationResponse verifyEmail(String token) {
+        return emailVerificationService.verify(token);
+    }
+
+    public ResendVerificationResponse resendVerification(ResendVerificationRequest req) {
+        return emailVerificationService.resend(req.email().trim().toLowerCase());
+    }
+
     @Transactional
     public void forgotPassword(ForgotPasswordRequest req) {
-        String role = resolveRole(req.email());
+        String email = req.email().trim().toLowerCase();
+        String role = resolveRole(email);
         if (role == null) {
             return;
         }
         String token = UUID.randomUUID().toString();
         PasswordResetToken resetToken = PasswordResetToken.builder()
-                .email(req.email())
+                .email(email)
                 .token(token)
                 .role(role)
                 .expiresAt(Instant.now().plusSeconds(3600))
                 .build();
         resetTokenRepository.save(resetToken);
-        emailService.send(req.email(), "Reset lozinke",
-                "Kliknite na link: " + frontendUrl + "/reset-password?token=" + token);
+        String link = frontendUrl + "/reset-password?token=" + token;
+        try {
+            emailService.send(email, "Reset lozinke — Majstor na klik",
+                    "Poštovani,\n\nPrimili smo zahtev za reset lozinke.\n\n"
+                            + "Kliknite na link da postavite novu lozinku:\n" + link
+                            + "\n\nLink važi 1 sat. Ako niste vi tražili reset, ignorišite ovaj email.\n\nMajstor na klik");
+        } catch (Exception e) {
+            log.error("[RESET] Greška pri slanju na {}: {}", email, e.getMessage());
+            throw new IllegalStateException("Email nije poslat. Pokušajte ponovo za nekoliko minuta.");
+        }
     }
 
     @Transactional

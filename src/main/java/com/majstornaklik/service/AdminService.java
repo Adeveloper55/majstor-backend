@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.majstornaklik.util.PibUtils;
+import com.majstornaklik.util.PhoneUtils;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -37,6 +38,7 @@ public class AdminService {
     private final ContactMessageRepository contactMessageRepository;
     private final JobApplicationRepository jobApplicationRepository;
     private final CompanyRegistrationRepository companyRegistrationRepository;
+    private final PhoneUniquenessService phoneUniquenessService;
 
     public Page<DtoMapper.UserDto> listUsers(String search, Pageable pageable) {
         if (search != null && !search.isBlank()) {
@@ -89,14 +91,18 @@ public class AdminService {
         if (pib != null && handymanRepository.existsByPib(pib)) {
             throw new IllegalArgumentException("PIB je već registrovan");
         }
+        String phoneNormalized = PhoneUtils.normalizeOptional(req.phone());
+        phoneUniquenessService.assertPhoneAvailable(phoneNormalized, null, null, null);
         Handyman handyman = Handyman.builder()
                 .fullName(req.fullName())
                 .email(req.email())
                 .passwordHash(passwordEncoder.encode(req.password()))
-                .phone(req.phone())
+                .phone(phoneNormalized)
+                .phoneNormalized(phoneNormalized)
                 .city(req.city())
                 .bio(req.bio())
                 .pib(pib)
+                .emailVerified(true)
                 .build();
         handymanRepository.save(handyman);
         if (req.initialTokens() != null && req.initialTokens() > 0) {

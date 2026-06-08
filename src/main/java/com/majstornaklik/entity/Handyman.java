@@ -31,6 +31,10 @@ public class Handyman {
     private String passwordHash;
 
     private String phone;
+
+    @Column(name = "phone_normalized", length = 30)
+    private String phoneNormalized;
+
     private String city;
     private Double latitude;
     private Double longitude;
@@ -42,6 +46,10 @@ public class Handyman {
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;
+
+    @Column(name = "email_verified")
+    @Builder.Default
+    private Boolean emailVerified = false;
 
     @Column(name = "is_verified")
     @Builder.Default

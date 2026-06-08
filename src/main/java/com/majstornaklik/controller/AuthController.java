@@ -18,12 +18,12 @@ public class AuthController {
     private final SecurityUtils securityUtils;
 
     @PostMapping("/register/client")
-    public AuthResponse registerClient(@Valid @RequestBody RegisterClientRequest req) {
+    public RegisterPendingResponse registerClient(@Valid @RequestBody RegisterClientRequest req) {
         return authService.registerClient(req);
     }
 
     @PostMapping("/register/handyman")
-    public AuthResponse registerHandyman(@Valid @RequestBody RegisterHandymanRequest req) {
+    public RegisterPendingResponse registerHandyman(@Valid @RequestBody RegisterHandymanRequest req) {
         return authService.registerHandyman(req);
     }
 
@@ -50,5 +50,15 @@ public class AuthController {
     @PostMapping("/reset-password")
     public void resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
         authService.resetPassword(req);
+    }
+
+    @GetMapping("/verify-email")
+    public EmailVerificationResponse verifyEmail(@RequestParam String token) {
+        return authService.verifyEmail(token);
+    }
+
+    @PostMapping("/resend-verification")
+    public ResendVerificationResponse resendVerification(@Valid @RequestBody ResendVerificationRequest req) {
+        return authService.resendVerification(req);
     }
 }

@@ -58,7 +58,7 @@ public class ApplicationService {
                 emailService.send(client.getEmail(), "Nova prijava na posao",
                         "Majstor " + handyman.getFullName() + " se prijavio na vaš oglas. Admin će odobriti dodelu."));
 
-        emailService.send("admin@majstornaklik.rs", "Novi zahtev za posao",
+        emailService.sendToAdmin("Novi zahtev za posao",
                 "Majstor " + handyman.getFullName() + " traži posao: " + job.getTitle()
                         + " (" + job.getTokenCost() + " tokena). Pregledajte u admin panelu → Zahtevi za posao.");
 

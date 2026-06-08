@@ -17,4 +17,15 @@ public interface CompanyRegistrationRepository extends JpaRepository<CompanyRegi
     boolean existsByEmailAndStatus(String email, String status);
 
     long countByStatus(String status);
+
+    Optional<CompanyRegistrationRequest> findTopByEmailAndStatusAndEmailVerifiedFalseOrderByCreatedAtDesc(
+            String email, String status);
+
+    Page<CompanyRegistrationRequest> findByStatusAndEmailVerifiedTrueOrderByCreatedAtDesc(String status, Pageable pageable);
+
+    Page<CompanyRegistrationRequest> findByEmailVerifiedTrueOrderByCreatedAtDesc(Pageable pageable);
+
+    boolean existsByNormalizedPhoneAndStatus(String normalizedPhone, String status);
+
+    boolean existsByNormalizedPhoneAndStatusAndIdNot(String normalizedPhone, String status, UUID id);
 }
