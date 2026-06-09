@@ -39,19 +39,36 @@ public final class DtoMapper {
     }
 
     public static JobListingDto toJobDto(JobListing j, Double distance) {
-        return toJobDto(j, distance, null);
+        return toJobDto(j, distance, null, null, false);
     }
 
     public static JobListingDto toJobDto(JobListing j, Double distance, ClientContactDto clientContact) {
+        return toJobDto(j, distance, clientContact, null, false);
+    }
+
+    public static JobListingDto toJobDto(JobListing j, Double distance, ClientContactDto clientContact,
+                                         boolean hideTokenCost) {
+        return toJobDto(j, distance, clientContact, null, hideTokenCost);
+    }
+
+    public static JobListingDto toJobDto(JobListing j, Double distance, ClientContactDto clientContact,
+                                         HandymanContactDto assignedHandymanContact,
+                                         boolean hideTokenCost) {
+        Integer tokenCost = hideTokenCost ? null : j.getTokenCost();
         return new JobListingDto(
                 j.getId(), j.getUserId(), j.getCategory().getId(), toCategoryDto(j.getCategory()),
                 j.getTitle(), j.getDescription(), j.getAddress(), j.getCity(),
-                j.getLatitude(), j.getLongitude(), j.getImages(), j.getAiScore(), j.getTokenCost(),
-                j.getStatus(), j.getSelectedHandymanId(), j.getCreatedAt(), distance, clientContact);
+                j.getLatitude(), j.getLongitude(), j.getImages(), j.getAiScore(), tokenCost,
+                j.getStatus(), j.getSelectedHandymanId(), j.getCreatedAt(), distance, clientContact,
+                assignedHandymanContact);
     }
 
     public static ClientContactDto toClientContact(User u) {
         return new ClientContactDto(u.getFullName(), u.getEmail(), u.getPhone(), u.getAddress(), u.getCity());
+    }
+
+    public static HandymanContactDto toHandymanContact(Handyman h) {
+        return new HandymanContactDto(h.getFullName(), h.getEmail(), h.getPhone());
     }
 
     public record UserDto(UUID id, String fullName, String email, String phone, String city,
@@ -77,7 +94,8 @@ public final class DtoMapper {
                                 Double latitude, Double longitude, String[] images,
                                 Integer aiScore, Integer tokenCost, String status,
                                 UUID selectedHandymanId, Instant createdAt, Double distance,
-                                ClientContactDto clientContact) {}
+                                ClientContactDto clientContact,
+                                HandymanContactDto assignedHandymanContact) {}
 
     public static AuthResponse buildAuthResponse(String token, UserPrincipal principal, Object userDto) {
         return new AuthResponse(token, principal.getRole(), userDto);

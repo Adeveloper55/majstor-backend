@@ -14,6 +14,10 @@ public interface JobListingRepository extends JpaRepository<JobListing, UUID> {
     Page<JobListing> findByUserId(UUID userId, Pageable pageable);
     Page<JobListing> findByStatus(String status, Pageable pageable);
 
+    @Query(value = "SELECT j FROM JobListing j JOIN FETCH j.category WHERE j.userId = :userId",
+            countQuery = "SELECT COUNT(j) FROM JobListing j WHERE j.userId = :userId")
+    Page<JobListing> findByUserIdWithCategory(@Param("userId") UUID userId, Pageable pageable);
+
     @Query("SELECT j FROM JobListing j JOIN FETCH j.category WHERE j.status = :status AND (:categoryId IS NULL OR j.category.id = :categoryId) AND (:city IS NULL OR :city = '' OR LOWER(j.city) LIKE LOWER(CONCAT('%', :city, '%')))")
     Page<JobListing> findWithFilters(@Param("status") String status, @Param("categoryId") Integer categoryId, @Param("city") String city, Pageable pageable);
 
@@ -27,4 +31,8 @@ public interface JobListingRepository extends JpaRepository<JobListing, UUID> {
 
     @Query("SELECT j FROM JobListing j JOIN FETCH j.category WHERE j.selectedHandymanId = :handymanId ORDER BY j.createdAt DESC")
     List<JobListing> findBySelectedHandymanIdWithCategory(@Param("handymanId") UUID handymanId);
+
+    /** Samo admin-odobreni oglasi vidljivi majstorima */
+    @Query("SELECT j FROM JobListing j JOIN FETCH j.category WHERE j.status = 'OPEN' AND j.tokenCost > 0")
+    List<JobListing> findAllAdminApprovedOpen();
 }

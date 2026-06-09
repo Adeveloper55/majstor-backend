@@ -50,11 +50,11 @@ public class JobListing {
 
     @Column(name = "token_cost", nullable = false)
     @Builder.Default
-    private Integer tokenCost = 1;
+    private Integer tokenCost = 0;
 
     @Column(length = 30)
     @Builder.Default
-    private String status = "OPEN";
+    private String status = "PENDING_APPROVAL";
 
     @Column(name = "selected_handyman_id")
     private UUID selectedHandymanId;

@@ -120,6 +120,24 @@ public class HandymanController {
         return jobService.getAssignedJobsForHandyman(securityUtils.getCurrentUserId());
     }
 
+    @GetMapping("/me/available-jobs")
+    public Page<DtoMapper.JobListingDto> getAvailableJobs(
+            @RequestParam(required = false) List<Integer> categories,
+            @RequestParam(required = false) String city,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lon,
+            @RequestParam(required = false) Double radius,
+            @RequestParam(required = false) Integer minTokenCost,
+            @RequestParam(required = false) Integer maxTokenCost,
+            @RequestParam(required = false, defaultValue = "newest") String sort,
+            Pageable pageable) {
+        securityUtils.requireRole("ROLE_HANDYMAN");
+        return jobService.listAvailableJobsForHandyman(
+                securityUtils.getCurrentUserId(),
+                categories, city, lat, lon, radius,
+                minTokenCost, maxTokenCost, sort, pageable);
+    }
+
     @DeleteMapping("/me")
     public void deactivate() {
         securityUtils.requireRole("ROLE_HANDYMAN");

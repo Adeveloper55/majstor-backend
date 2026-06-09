@@ -1,6 +1,7 @@
 package com.majstornaklik.service;
 
 import com.majstornaklik.dto.ClientContactDto;
+import com.majstornaklik.dto.HandymanContactDto;
 import com.majstornaklik.dto.CreateJobRequest;
 import com.majstornaklik.dto.DtoMapper;
 import com.majstornaklik.dto.ScorePreviewRequest;
@@ -55,7 +56,6 @@ public class JobService {
         Category category = categoryRepository.findById(req.categoryId())
                 .orElseThrow(() -> new IllegalArgumentException("Kategorija nije pronađena"));
         var aiResult = aiScoringService.scoreJob(category.getName(), req.description());
-        int tokenCost = aiResult.score() * category.getBaseTokenCost();
 
         JobListing job = JobListing.builder()
                 .userId(userId)
@@ -68,29 +68,38 @@ public class JobService {
                 .longitude(req.longitude())
                 .images(req.images())
                 .aiScore(aiResult.score())
-                .tokenCost(tokenCost)
-                .status("OPEN")
+                .tokenCost(0)
+                .status("PENDING_APPROVAL")
                 .build();
         jobListingRepository.save(job);
-        return DtoMapper.toJobDto(job, null);
+        emailService.sendToAdmin("Novi oglas na čekanju",
+                "Klijent je poslao oglas \"" + job.getTitle() + "\". Odobrite u admin panelu → Poslovi na čekanju.");
+        return DtoMapper.toJobDto(job, null, null, null, true);
     }
 
     @Transactional(readOnly = true)
     public DtoMapper.JobListingDto getJob(UUID id, Double userLat, Double userLon, Double radiusKm,
                                           UUID viewerId, String viewerRole) {
-        JobListing job = jobListingRepository.findById(id)
+        JobListing job = jobListingRepository.findByIdWithCategory(id)
                 .orElseThrow(() -> new IllegalArgumentException("Posao nije pronađen"));
-        if ("ROLE_HANDYMAN".equals(viewerRole) && viewerId != null && "OPEN".equals(job.getStatus())) {
-            Handyman handyman = handymanRepository.findById(viewerId)
-                    .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
-            handymanCategoryService.assertCanAccessJobCategory(handyman, job.getCategory().getId());
+        if ("PENDING_APPROVAL".equals(job.getStatus())) {
+            boolean isOwner = viewerId != null && viewerId.equals(job.getUserId());
+            if (!"ROLE_ADMIN".equals(viewerRole) && !isOwner) {
+                throw new IllegalArgumentException("Posao nije pronađen");
+            }
+        }
+        if ("ROLE_HANDYMAN".equals(viewerRole) && viewerId != null) {
+            assertHandymanCanViewJob(job, viewerId);
         }
         Double distance = computeDistance(job, userLat, userLon);
         if (radiusKm != null && distance != null && distance > radiusKm) {
             throw new IllegalArgumentException("Posao nije u zadatom radijusu");
         }
         ClientContactDto clientContact = resolveClientContact(job, viewerId, viewerRole);
-        return DtoMapper.toJobDto(job, distance, clientContact);
+        HandymanContactDto assignedHandyman = resolveAssignedHandymanContact(job, viewerId, viewerRole);
+        boolean hideTokenCost = "ROLE_CLIENT".equals(viewerRole)
+                && viewerId != null && job.getUserId().equals(viewerId);
+        return DtoMapper.toJobDto(job, distance, clientContact, assignedHandyman, hideTokenCost);
     }
 
     @Transactional(readOnly = true)
@@ -104,6 +113,49 @@ public class JobService {
                     return DtoMapper.toJobDto(j, null, contact);
                 })
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<DtoMapper.JobListingDto> listAvailableJobsForHandyman(
+            UUID handymanId,
+            List<Integer> categoryIds,
+            String city,
+            Double userLat,
+            Double userLon,
+            Double radiusKm,
+            Integer minTokenCost,
+            Integer maxTokenCost,
+            String sort,
+            Pageable pageable) {
+        Handyman handyman = handymanRepository.findById(handymanId)
+                .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
+        List<Integer> allowedCategories = handymanCategoryService.getCategoryIds(handyman);
+        if (allowedCategories.isEmpty()) {
+            return Page.empty(pageable);
+        }
+        final List<Integer> filterCategories = categoryIds != null && !categoryIds.isEmpty()
+                ? categoryIds.stream().filter(allowedCategories::contains).toList()
+                : allowedCategories;
+        if (filterCategories.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        List<DtoMapper.JobListingDto> items = jobListingRepository.findAllAdminApprovedOpen().stream()
+                .filter(j -> filterCategories.contains(j.getCategory().getId()))
+                .filter(j -> city == null || city.isBlank()
+                        || (j.getCity() != null && j.getCity().toLowerCase().contains(city.toLowerCase())))
+                .map(j -> DtoMapper.toJobDto(j, computeDistance(j, userLat, userLon)))
+                .filter(dto -> minTokenCost == null || dto.tokenCost() >= minTokenCost)
+                .filter(dto -> maxTokenCost == null || dto.tokenCost() <= maxTokenCost)
+                .filter(dto -> radiusKm == null || userLat == null || userLon == null
+                        || dto.distance() == null || dto.distance() <= radiusKm)
+                .sorted(getComparator(sort))
+                .toList();
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), items.size());
+        List<DtoMapper.JobListingDto> pageSlice = start >= items.size() ? List.of() : items.subList(start, end);
+        return new PageImpl<>(pageSlice, pageable, items.size());
     }
 
     private ClientContactDto resolveClientContact(JobListing job, UUID viewerId, String viewerRole) {
@@ -129,7 +181,8 @@ public class JobService {
     public Page<DtoMapper.JobListingDto> listJobs(String status, Integer categoryId, List<Integer> categoryIds,
                                                    String city, Double userLat, Double userLon, Double radiusKm,
                                                    Integer minTokenCost, Integer maxTokenCost, String sort,
-                                                   Pageable pageable, List<Integer> restrictedCategoryIds) {
+                                                   Pageable pageable, List<Integer> restrictedCategoryIds,
+                                                   boolean publishedOnly) {
         String jobStatus = status != null ? status : "OPEN";
         List<Integer> filterCategories = categoryIds != null && !categoryIds.isEmpty()
                 ? categoryIds
@@ -164,12 +217,14 @@ public class JobService {
         } else {
             Page<JobListing> page = jobListingRepository.findWithFilters(jobStatus, categoryId, city, pageable);
             List<DtoMapper.JobListingDto> pageItems = page.getContent().stream()
+                    .filter(j -> !publishedOnly || isPublishedForHandymen(j))
                     .map(j -> DtoMapper.toJobDto(j, computeDistance(j, userLat, userLon)))
                     .collect(Collectors.toList());
-            return new PageImpl<>(pageItems, pageable, page.getTotalElements());
+            return new PageImpl<>(pageItems, pageable, pageItems.size());
         }
 
         List<DtoMapper.JobListingDto> items = source.stream()
+                .filter(j -> !publishedOnly || isPublishedForHandymen(j))
                 .map(j -> DtoMapper.toJobDto(j, computeDistance(j, userLat, userLon)))
                 .filter(dto -> effectiveFilterCategories == null || effectiveFilterCategories.contains(dto.categoryId()))
                 .filter(dto -> minTokenCost == null || dto.tokenCost() >= minTokenCost)
@@ -197,16 +252,17 @@ public class JobService {
                 Comparator.nullsLast(Comparator.reverseOrder()));
     }
 
+    @Transactional(readOnly = true)
     public Page<DtoMapper.JobListingDto> getMyJobs(UUID userId, Pageable pageable) {
-        return jobListingRepository.findByUserId(userId, pageable)
-                .map(j -> DtoMapper.toJobDto(j, null));
+        return jobListingRepository.findByUserIdWithCategory(userId, pageable)
+                .map(j -> toClientJobDto(j, userId));
     }
 
     @Transactional
     public DtoMapper.JobListingDto updateJob(UUID userId, UUID jobId, CreateJobRequest req) {
         JobListing job = getOwnedJob(userId, jobId);
-        if (!"OPEN".equals(job.getStatus())) {
-            throw new IllegalArgumentException("Možete menjati samo otvorene poslove");
+        if (!"OPEN".equals(job.getStatus()) && !"PENDING_APPROVAL".equals(job.getStatus())) {
+            throw new IllegalArgumentException("Možete menjati samo poslove na čekanju ili otvorene poslove");
         }
         Category category = categoryRepository.findById(req.categoryId())
                 .orElseThrow(() -> new IllegalArgumentException("Kategorija nije pronađena"));
@@ -220,14 +276,22 @@ public class JobService {
         job.setLongitude(req.longitude());
         job.setImages(req.images());
         job.setAiScore(aiResult.score());
-        job.setTokenCost(aiResult.score() * category.getBaseTokenCost());
         jobListingRepository.save(job);
-        return DtoMapper.toJobDto(job, null);
+        return DtoMapper.toJobDto(job, null, null, null, true);
     }
 
     @Transactional
     public void cancelJob(UUID userId, UUID jobId) {
         JobListing job = getOwnedJob(userId, jobId);
+        if (job.getSelectedHandymanId() != null) {
+            throw new IllegalArgumentException("Ne možete obrisati posao kojem je dodeljen majstor");
+        }
+        if ("IN_PROGRESS".equals(job.getStatus()) || "COMPLETED".equals(job.getStatus())) {
+            throw new IllegalArgumentException("Ne možete obrisati posao koji je u toku ili završen");
+        }
+        if ("CANCELLED".equals(job.getStatus())) {
+            throw new IllegalArgumentException("Posao je već otkazan");
+        }
         job.setStatus("CANCELLED");
         jobListingRepository.save(job);
     }
@@ -258,7 +322,55 @@ public class JobService {
                     emailService.send(h.getEmail(), "Posao završen",
                             "Posao je označen kao završen. Ostavite recenziju: " + reviewLink));
         }
-        return DtoMapper.toJobDto(job, null);
+        if ("ROLE_CLIENT".equals(role)) {
+            return toClientJobDto(job, userId);
+        }
+        ClientContactDto contact = userRepository.findById(job.getUserId())
+                .map(DtoMapper::toClientContact).orElse(null);
+        return DtoMapper.toJobDto(job, null, contact);
+    }
+
+    private DtoMapper.JobListingDto toClientJobDto(JobListing job, UUID clientId) {
+        HandymanContactDto assigned = resolveAssignedHandymanContact(job, clientId, "ROLE_CLIENT");
+        return DtoMapper.toJobDto(job, null, null, assigned, true);
+    }
+
+    private HandymanContactDto resolveAssignedHandymanContact(JobListing job, UUID viewerId, String viewerRole) {
+        if (viewerId == null || !"ROLE_CLIENT".equals(viewerRole)) {
+            return null;
+        }
+        if (!job.getUserId().equals(viewerId) || job.getSelectedHandymanId() == null) {
+            return null;
+        }
+        if (!"IN_PROGRESS".equals(job.getStatus()) && !"COMPLETED".equals(job.getStatus())) {
+            return null;
+        }
+        return handymanRepository.findById(job.getSelectedHandymanId())
+                .map(DtoMapper::toHandymanContact)
+                .orElse(null);
+    }
+
+    private boolean isPublishedForHandymen(JobListing job) {
+        return "OPEN".equals(job.getStatus())
+                && job.getTokenCost() != null
+                && job.getTokenCost() > 0;
+    }
+
+    private void assertHandymanCanViewJob(JobListing job, UUID handymanId) {
+        if ("OPEN".equals(job.getStatus())) {
+            if (!isPublishedForHandymen(job)) {
+                throw new IllegalArgumentException("Posao nije pronađen");
+            }
+            Handyman handyman = handymanRepository.findById(handymanId)
+                    .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
+            handymanCategoryService.assertCanAccessJobCategory(handyman, job.getCategory().getId());
+            return;
+        }
+        if (("IN_PROGRESS".equals(job.getStatus()) || "COMPLETED".equals(job.getStatus()))
+                && handymanId.equals(job.getSelectedHandymanId())) {
+            return;
+        }
+        throw new IllegalArgumentException("Posao nije pronađen");
     }
 
     private JobListing getOwnedJob(UUID userId, UUID jobId) {

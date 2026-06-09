@@ -34,6 +34,9 @@ public class ApplicationService {
         if (!"OPEN".equals(job.getStatus())) {
             throw new IllegalArgumentException("Posao nije otvoren za prijave");
         }
+        if (job.getTokenCost() == null || job.getTokenCost() <= 0) {
+            throw new IllegalArgumentException("Posao još nije odobren za prijave");
+        }
         if (applicationRepository.existsByJobListingIdAndHandymanId(jobId, handymanId)) {
             throw new IllegalArgumentException("Već ste se prijavili na ovaj posao");
         }
@@ -54,12 +57,8 @@ public class ApplicationService {
                 .build();
         applicationRepository.save(application);
 
-        userRepository.findById(job.getUserId()).ifPresent(client ->
-                emailService.send(client.getEmail(), "Nova prijava na posao",
-                        "Majstor " + handyman.getFullName() + " se prijavio na vaš oglas. Admin će odobriti dodelu."));
-
-        emailService.sendToAdmin("Novi zahtev za posao",
-                "Majstor " + handyman.getFullName() + " traži posao: " + job.getTitle()
+        emailService.sendToAdmin("Nova prijava na posao",
+                "Majstor " + handyman.getFullName() + " se prijavio na oglas: " + job.getTitle()
                         + " (" + job.getTokenCost() + " tokena). Pregledajte u admin panelu → Zahtevi za posao.");
 
         return Map.of("id", application.getId(), "status", application.getStatus());

@@ -1,5 +1,6 @@
 package com.majstornaklik.controller;
 
+import com.majstornaklik.dto.AdminApproveJobRequest;
 import com.majstornaklik.dto.AdminCreateHandymanRequest;
 import com.majstornaklik.dto.AdminCreateJobRequest;
 import com.majstornaklik.dto.AdjustTokensRequest;
@@ -72,8 +73,10 @@ public class AdminController {
     }
 
     @GetMapping("/jobs")
-    public Page<DtoMapper.JobListingDto> listJobs(Pageable pageable) {
-        return adminService.listJobs(pageable);
+    public Page<DtoMapper.JobListingDto> listJobs(
+            @RequestParam(required = false) String status,
+            Pageable pageable) {
+        return adminService.listJobs(status, pageable);
     }
 
     @PostMapping("/jobs")
@@ -84,6 +87,13 @@ public class AdminController {
     @GetMapping("/jobs/{id}")
     public DtoMapper.JobListingDto getJob(@PathVariable UUID id) {
         return adminService.getJob(id);
+    }
+
+    @PostMapping("/jobs/{id}/approve")
+    public DtoMapper.JobListingDto approveJob(
+            @PathVariable UUID id,
+            @Valid @RequestBody AdminApproveJobRequest req) {
+        return adminService.approveJob(id, req);
     }
 
     @DeleteMapping("/jobs/{id}")

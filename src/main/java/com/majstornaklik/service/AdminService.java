@@ -1,5 +1,6 @@
 package com.majstornaklik.service;
 
+import com.majstornaklik.dto.AdminApproveJobRequest;
 import com.majstornaklik.dto.AdminCreateHandymanRequest;
 import com.majstornaklik.dto.AdminCreateJobRequest;
 import com.majstornaklik.dto.ClientContactDto;
@@ -142,8 +143,31 @@ public class AdminService {
     }
 
     @Transactional(readOnly = true)
-    public Page<DtoMapper.JobListingDto> listJobs(Pageable pageable) {
-        return jobListingRepository.findAll(pageable).map(j -> DtoMapper.toJobDto(j, null));
+    public Page<DtoMapper.JobListingDto> listJobs(String status, Pageable pageable) {
+        Page<JobListing> page = status != null && !status.isBlank()
+                ? jobListingRepository.findByStatus(status, pageable)
+                : jobListingRepository.findAll(pageable);
+        return page.map(j -> {
+            ClientContactDto contact = userRepository.findById(j.getUserId())
+                    .map(DtoMapper::toClientContact).orElse(null);
+            return DtoMapper.toJobDto(j, null, contact);
+        });
+    }
+
+    @Transactional
+    public DtoMapper.JobListingDto approveJob(UUID id, AdminApproveJobRequest req) {
+        JobListing job = jobListingRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Posao nije pronađen"));
+        if (!"PENDING_APPROVAL".equals(job.getStatus())) {
+            throw new IllegalArgumentException("Posao nije na čekanju odobrenja");
+        }
+        job.setTokenCost(req.tokenCost());
+        job.setStatus("OPEN");
+        jobListingRepository.save(job);
+        userRepository.findById(job.getUserId()).ifPresent(u ->
+                emailService.send(u.getEmail(), "Oglas odobren",
+                        "Vaš oglas \"" + job.getTitle() + "\" je odobren i sada je vidljiv majstorima."));
+        return getJob(id);
     }
 
     @Transactional(readOnly = true)
@@ -192,6 +216,7 @@ public class AdminService {
         stats.put("totalHandymen", handymanRepository.count());
         stats.put("totalJobs", jobListingRepository.count());
         stats.put("openJobs", jobListingRepository.findByStatus("OPEN", Pageable.unpaged()).getTotalElements());
+        stats.put("pendingJobApprovals", jobListingRepository.findByStatus("PENDING_APPROVAL", Pageable.unpaged()).getTotalElements());
         stats.put("pendingTokenRequests", requestRepository.findByStatus("PENDING", Pageable.unpaged()).getTotalElements());
         stats.put("pendingJobApplications", jobApplicationRepository.countByStatus("PENDING"));
         stats.put("totalReviews", reviewRepository.count());

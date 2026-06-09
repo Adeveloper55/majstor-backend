@@ -1,11 +1,8 @@
 package com.majstornaklik.controller;
 
 import com.majstornaklik.dto.*;
-import com.majstornaklik.entity.Handyman;
-import com.majstornaklik.repository.*;
 import com.majstornaklik.security.SecurityUtils;
 import com.majstornaklik.service.ApplicationService;
-import com.majstornaklik.service.HandymanCategoryService;
 import com.majstornaklik.service.JobService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,8 +22,6 @@ public class JobController {
     private final JobService jobService;
     private final ApplicationService applicationService;
     private final SecurityUtils securityUtils;
-    private final HandymanRepository handymanRepository;
-    private final HandymanCategoryService handymanCategoryService;
 
     @GetMapping
     public Page<DtoMapper.JobListingDto> listJobs(
@@ -42,14 +37,16 @@ public class JobController {
             @RequestParam(required = false, defaultValue = "newest") String sort,
             Pageable pageable) {
         List<Integer> restrictedCategories = null;
+        boolean publishedOnly = true;
         var viewer = securityUtils.getCurrentUserOrNull();
+        if (viewer != null && "ROLE_ADMIN".equals(viewer.getRole())) {
+            publishedOnly = false;
+        }
         if (viewer != null && "ROLE_HANDYMAN".equals(viewer.getRole())) {
-            Handyman handyman = handymanRepository.findById(viewer.getId())
-                    .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
-            restrictedCategories = handymanCategoryService.getCategoryIds(handyman);
+            throw new IllegalStateException("Majstori koriste /api/handymen/me/available-jobs");
         }
         return jobService.listJobs(status, category, categories, city, lat, lon, radius,
-                minTokenCost, maxTokenCost, sort, pageable, restrictedCategories);
+                minTokenCost, maxTokenCost, sort, pageable, restrictedCategories, publishedOnly);
     }
 
     @GetMapping("/{id}")
@@ -88,12 +85,6 @@ public class JobController {
         return jobService.completeJob(user.getId(), user.getRole(), id);
     }
 
-    @GetMapping("/my/recent-applications")
-    public List<Map<String, Object>> recentApplications() {
-        securityUtils.requireRole("ROLE_CLIENT");
-        return applicationService.listRecentForClient(securityUtils.getCurrentUserId());
-    }
-
     @GetMapping("/my")
     public Page<DtoMapper.JobListingDto> myJobs(Pageable pageable) {
         securityUtils.requireRole("ROLE_CLIENT");
@@ -110,11 +101,5 @@ public class JobController {
     public Map<String, Object> apply(@PathVariable UUID id, @RequestBody(required = false) ApplyJobRequest req) {
         securityUtils.requireRole("ROLE_HANDYMAN");
         return applicationService.apply(securityUtils.getCurrentUserId(), id, req);
-    }
-
-    @GetMapping("/{id}/applications")
-    public Page<Map<String, Object>> listApplications(@PathVariable UUID id, Pageable pageable) {
-        securityUtils.requireRole("ROLE_CLIENT");
-        return applicationService.listForJob(securityUtils.getCurrentUserId(), id, pageable);
     }
 }
