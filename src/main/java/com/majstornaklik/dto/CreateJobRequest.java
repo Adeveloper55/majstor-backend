@@ -11,5 +11,6 @@ public record CreateJobRequest(
         String city,
         Double latitude,
         Double longitude,
+        Boolean locationPinned,
         String[] images
 ) {}

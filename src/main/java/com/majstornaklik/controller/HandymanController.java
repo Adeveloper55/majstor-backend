@@ -138,14 +138,6 @@ public class HandymanController {
                 minTokenCost, maxTokenCost, sort, pageable);
     }
 
-    @DeleteMapping("/me")
-    public void deactivate() {
-        securityUtils.requireRole("ROLE_HANDYMAN");
-        Handyman h = getCurrent();
-        h.setIsActive(false);
-        handymanRepository.save(h);
-    }
-
     private Handyman getCurrent() {
         return handymanRepository.findById(securityUtils.getCurrentUserId())
                 .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));

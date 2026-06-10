@@ -42,14 +42,6 @@ public class UserController {
         return DtoMapper.toUserDto(user);
     }
 
-    @DeleteMapping("/me")
-    public void deactivate() {
-        securityUtils.requireRole("ROLE_CLIENT");
-        User user = getCurrentUser();
-        user.setIsActive(false);
-        userRepository.save(user);
-    }
-
     private User getCurrentUser() {
         return userRepository.findById(securityUtils.getCurrentUserId())
                 .orElseThrow(() -> new IllegalArgumentException("Korisnik nije pronađen"));

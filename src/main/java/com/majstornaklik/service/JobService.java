@@ -14,6 +14,7 @@ import com.majstornaklik.repository.HandymanRepository;
 import com.majstornaklik.repository.JobListingRepository;
 import com.majstornaklik.repository.UserRepository;
 import com.majstornaklik.util.GeoUtils;
+import com.majstornaklik.util.CityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -64,13 +65,12 @@ public class JobService {
                 .description(req.description())
                 .address(req.address())
                 .city(req.city())
-                .latitude(req.latitude())
-                .longitude(req.longitude())
                 .images(req.images())
                 .aiScore(aiResult.score())
                 .tokenCost(0)
                 .status("PENDING_APPROVAL")
                 .build();
+        applyJobLocation(job, req.locationPinned(), req.latitude(), req.longitude());
         jobListingRepository.save(job);
         emailService.sendToAdmin("Novi oglas na čekanju",
                 "Klijent je poslao oglas \"" + job.getTitle() + "\". Odobrite u admin panelu → Poslovi na čekanju.");
@@ -99,7 +99,8 @@ public class JobService {
         HandymanContactDto assignedHandyman = resolveAssignedHandymanContact(job, viewerId, viewerRole);
         boolean hideTokenCost = "ROLE_CLIENT".equals(viewerRole)
                 && viewerId != null && job.getUserId().equals(viewerId);
-        return DtoMapper.toJobDto(job, distance, clientContact, assignedHandyman, hideTokenCost);
+        boolean hideExactLocation = shouldHideExactLocation(job, viewerId, viewerRole);
+        return DtoMapper.toJobDto(job, distance, clientContact, assignedHandyman, hideTokenCost, hideExactLocation);
     }
 
     @Transactional(readOnly = true)
@@ -142,12 +143,12 @@ public class JobService {
 
         List<DtoMapper.JobListingDto> items = jobListingRepository.findAllAdminApprovedOpen().stream()
                 .filter(j -> filterCategories.contains(j.getCategory().getId()))
-                .filter(j -> city == null || city.isBlank()
-                        || (j.getCity() != null && j.getCity().toLowerCase().contains(city.toLowerCase())))
-                .map(j -> DtoMapper.toJobDto(j, computeDistance(j, userLat, userLon)))
+                .filter(j -> CityUtils.matchesCity(j.getCity(), city))
+                .map(j -> DtoMapper.toJobDto(j, computeDistance(j, userLat, userLon), null, null, false, true))
                 .filter(dto -> minTokenCost == null || dto.tokenCost() >= minTokenCost)
                 .filter(dto -> maxTokenCost == null || dto.tokenCost() <= maxTokenCost)
-                .filter(dto -> radiusKm == null || userLat == null || userLon == null
+                .filter(dto -> city != null && !city.isBlank()
+                        || radiusKm == null || userLat == null || userLon == null
                         || dto.distance() == null || dto.distance() <= radiusKm)
                 .sorted(getComparator(sort))
                 .toList();
@@ -272,8 +273,7 @@ public class JobService {
         job.setDescription(req.description());
         job.setAddress(req.address());
         job.setCity(req.city());
-        job.setLatitude(req.latitude());
-        job.setLongitude(req.longitude());
+        applyJobLocation(job, req.locationPinned(), req.latitude(), req.longitude());
         job.setImages(req.images());
         job.setAiScore(aiResult.score());
         jobListingRepository.save(job);
@@ -387,5 +387,29 @@ public class JobService {
             return null;
         }
         return GeoUtils.haversineKm(userLat, userLon, job.getLatitude(), job.getLongitude());
+    }
+
+    private void applyJobLocation(JobListing job, Boolean locationPinned, Double latitude, Double longitude) {
+        boolean pinned = Boolean.TRUE.equals(locationPinned);
+        job.setLocationPinned(pinned);
+        if (pinned && latitude != null && longitude != null) {
+            job.setLatitude(latitude);
+            job.setLongitude(longitude);
+        } else if (!pinned) {
+            job.setLatitude(null);
+            job.setLongitude(null);
+        }
+    }
+
+    private boolean shouldHideExactLocation(JobListing job, UUID viewerId, String viewerRole) {
+        if (!"ROLE_HANDYMAN".equals(viewerRole) || viewerId == null) {
+            return false;
+        }
+        return !isAssignedHandyman(job, viewerId);
+    }
+
+    private boolean isAssignedHandyman(JobListing job, UUID handymanId) {
+        return handymanId.equals(job.getSelectedHandymanId())
+                && ("IN_PROGRESS".equals(job.getStatus()) || "COMPLETED".equals(job.getStatus()));
     }
 }

@@ -41,6 +41,10 @@ public class JobListing {
     private Double latitude;
     private Double longitude;
 
+    @Column(name = "location_pinned", nullable = false)
+    @Builder.Default
+    private Boolean locationPinned = false;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "TEXT[]")
     private String[] images;

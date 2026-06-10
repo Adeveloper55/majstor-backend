@@ -39,26 +39,37 @@ public final class DtoMapper {
     }
 
     public static JobListingDto toJobDto(JobListing j, Double distance) {
-        return toJobDto(j, distance, null, null, false);
+        return toJobDto(j, distance, null, null, false, false);
     }
 
     public static JobListingDto toJobDto(JobListing j, Double distance, ClientContactDto clientContact) {
-        return toJobDto(j, distance, clientContact, null, false);
+        return toJobDto(j, distance, clientContact, null, false, false);
     }
 
     public static JobListingDto toJobDto(JobListing j, Double distance, ClientContactDto clientContact,
                                          boolean hideTokenCost) {
-        return toJobDto(j, distance, clientContact, null, hideTokenCost);
+        return toJobDto(j, distance, clientContact, null, hideTokenCost, false);
     }
 
     public static JobListingDto toJobDto(JobListing j, Double distance, ClientContactDto clientContact,
                                          HandymanContactDto assignedHandymanContact,
                                          boolean hideTokenCost) {
+        return toJobDto(j, distance, clientContact, assignedHandymanContact, hideTokenCost, false);
+    }
+
+    public static JobListingDto toJobDto(JobListing j, Double distance, ClientContactDto clientContact,
+                                         HandymanContactDto assignedHandymanContact,
+                                         boolean hideTokenCost, boolean hideExactLocation) {
         Integer tokenCost = hideTokenCost ? null : j.getTokenCost();
         return new JobListingDto(
                 j.getId(), j.getUserId(), j.getCategory().getId(), toCategoryDto(j.getCategory()),
-                j.getTitle(), j.getDescription(), j.getAddress(), j.getCity(),
-                j.getLatitude(), j.getLongitude(), j.getImages(), j.getAiScore(), tokenCost,
+                j.getTitle(), j.getDescription(),
+                hideExactLocation ? null : j.getAddress(),
+                j.getCity(),
+                hideExactLocation ? null : j.getLatitude(),
+                hideExactLocation ? null : j.getLongitude(),
+                hideExactLocation ? false : Boolean.TRUE.equals(j.getLocationPinned()),
+                j.getImages(), j.getAiScore(), tokenCost,
                 j.getStatus(), j.getSelectedHandymanId(), j.getCreatedAt(), distance, clientContact,
                 assignedHandymanContact);
     }
@@ -91,7 +102,7 @@ public final class DtoMapper {
 
     public record JobListingDto(UUID id, UUID userId, Integer categoryId, CategoryDto category,
                                 String title, String description, String address, String city,
-                                Double latitude, Double longitude, String[] images,
+                                Double latitude, Double longitude, Boolean locationPinned, String[] images,
                                 Integer aiScore, Integer tokenCost, String status,
                                 UUID selectedHandymanId, Instant createdAt, Double distance,
                                 ClientContactDto clientContact,

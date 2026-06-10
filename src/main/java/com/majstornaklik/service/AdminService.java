@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.majstornaklik.util.PibUtils;
 import com.majstornaklik.util.PhoneUtils;
 
-import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -131,13 +130,15 @@ public class AdminService {
                 .description(req.description())
                 .address(req.address())
                 .city(req.city())
-                .latitude(req.latitude())
-                .longitude(req.longitude())
                 .images(req.images())
                 .aiScore(null)
                 .tokenCost(req.tokenCost())
                 .status("OPEN")
                 .build();
+        boolean pinned = req.latitude() != null && req.longitude() != null;
+        job.setLocationPinned(pinned);
+        job.setLatitude(pinned ? req.latitude() : null);
+        job.setLongitude(pinned ? req.longitude() : null);
         jobListingRepository.save(job);
         return DtoMapper.toJobDto(job, null);
     }
@@ -222,11 +223,6 @@ public class AdminService {
         stats.put("totalReviews", reviewRepository.count());
         stats.put("newContactMessages", contactMessageRepository.countByStatus("NEW"));
         stats.put("pendingCompanyRegistrations", companyRegistrationRepository.countByStatus("PENDING"));
-
-        BigDecimal revenue = requestRepository.findByStatus("APPROVED", Pageable.unpaged()).getContent().stream()
-                .map(TokenPurchaseRequest::getAmountExpected)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        stats.put("totalRevenue", revenue);
         return stats;
     }
 
