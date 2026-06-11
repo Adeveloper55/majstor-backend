@@ -27,6 +27,8 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,6 +42,7 @@ public class JobService {
     private final AiScoringService aiScoringService;
     private final EmailService emailService;
     private final HandymanCategoryService handymanCategoryService;
+    private final ApplicationService applicationService;
 
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
@@ -54,26 +57,37 @@ public class JobService {
 
     @Transactional
     public DtoMapper.JobListingDto createJob(UUID userId, CreateJobRequest req) {
+        if (req.city() == null || req.city().isBlank()) {
+            throw new IllegalArgumentException("Grad je obavezan");
+        }
         Category category = categoryRepository.findById(req.categoryId())
                 .orElseThrow(() -> new IllegalArgumentException("Kategorija nije pronađena"));
         var aiResult = aiScoringService.scoreJob(category.getName(), req.description());
+        int tokenCost = Math.max(1, aiResult.score() * category.getBaseTokenCost());
 
         JobListing job = JobListing.builder()
                 .userId(userId)
                 .category(category)
                 .title(req.title())
                 .description(req.description())
-                .address(req.address())
-                .city(req.city())
+                .city(req.city().trim())
                 .images(req.images())
                 .aiScore(aiResult.score())
-                .tokenCost(0)
+                .tokenCost(tokenCost)
                 .status("PENDING_APPROVAL")
+                .locationPinned(false)
                 .build();
-        applyJobLocation(job, req.locationPinned(), req.latitude(), req.longitude());
         jobListingRepository.save(job);
+
+        userRepository.findById(userId).ifPresent(u ->
+                emailService.sendSafely(u.getEmail(), "Oglas poslat na odobrenje",
+                        "Vaš oglas \"" + job.getTitle() + "\" je poslat adminu na pregled. "
+                                + "Biće vidljiv majstorima i izvođačima kada admin odobri oglas i postavi cenu u tokenima."));
         emailService.sendToAdmin("Novi oglas na čekanju",
-                "Klijent je poslao oglas \"" + job.getTitle() + "\". Odobrite u admin panelu → Poslovi na čekanju.");
+                "Klijent je poslao oglas \"" + job.getTitle() + "\" (" + job.getCity() + "). "
+                        + "AI predlog: " + tokenCost + " tokena. "
+                        + "Odobrite u admin panelu: " + frontendUrl + "/admin/pending-jobs");
+
         return DtoMapper.toJobDto(job, null, null, null, true);
     }
 
@@ -95,25 +109,19 @@ public class JobService {
         if (radiusKm != null && distance != null && distance > radiusKm) {
             throw new IllegalArgumentException("Posao nije u zadatom radijusu");
         }
-        ClientContactDto clientContact = resolveClientContact(job, viewerId, viewerRole);
+        boolean unlockedByMe = "ROLE_HANDYMAN".equals(viewerRole) && viewerId != null
+                && applicationService.hasUnlocked(viewerId, id);
+        ClientContactDto clientContact = resolveClientContact(job, viewerId, viewerRole, unlockedByMe);
         HandymanContactDto assignedHandyman = resolveAssignedHandymanContact(job, viewerId, viewerRole);
         boolean hideTokenCost = "ROLE_CLIENT".equals(viewerRole)
                 && viewerId != null && job.getUserId().equals(viewerId);
-        boolean hideExactLocation = shouldHideExactLocation(job, viewerId, viewerRole);
-        return DtoMapper.toJobDto(job, distance, clientContact, assignedHandyman, hideTokenCost, hideExactLocation);
+        boolean hideExactLocation = "ROLE_HANDYMAN".equals(viewerRole);
+        return DtoMapper.toJobDto(job, distance, clientContact, assignedHandyman, hideTokenCost, hideExactLocation, unlockedByMe);
     }
 
     @Transactional(readOnly = true)
     public List<DtoMapper.JobListingDto> getAssignedJobsForHandyman(UUID handymanId) {
-        return jobListingRepository.findBySelectedHandymanIdWithCategory(handymanId).stream()
-                .filter(j -> "IN_PROGRESS".equals(j.getStatus()) || "COMPLETED".equals(j.getStatus()))
-                .map(j -> {
-                    ClientContactDto contact = userRepository.findById(j.getUserId())
-                            .map(DtoMapper::toClientContact)
-                            .orElse(null);
-                    return DtoMapper.toJobDto(j, null, contact);
-                })
-                .toList();
+        return applicationService.listUnlockedJobsForHandyman(handymanId);
     }
 
     @Transactional(readOnly = true)
@@ -141,10 +149,18 @@ public class JobService {
             return Page.empty(pageable);
         }
 
+        Set<UUID> unlockedJobIds = new HashSet<>(applicationService.findUnlockedJobIds(handymanId));
+
         List<DtoMapper.JobListingDto> items = jobListingRepository.findAllAdminApprovedOpen().stream()
                 .filter(j -> filterCategories.contains(j.getCategory().getId()))
                 .filter(j -> CityUtils.matchesCity(j.getCity(), city))
-                .map(j -> DtoMapper.toJobDto(j, computeDistance(j, userLat, userLon), null, null, false, true))
+                .map(j -> {
+                    boolean unlocked = unlockedJobIds.contains(j.getId());
+                    ClientContactDto contact = unlocked
+                            ? userRepository.findById(j.getUserId()).map(DtoMapper::toClientContact).orElse(null)
+                            : null;
+                    return DtoMapper.toJobDto(j, computeDistance(j, userLat, userLon), contact, null, false, true, unlocked);
+                })
                 .filter(dto -> minTokenCost == null || dto.tokenCost() >= minTokenCost)
                 .filter(dto -> maxTokenCost == null || dto.tokenCost() <= maxTokenCost)
                 .filter(dto -> city != null && !city.isBlank()
@@ -159,7 +175,7 @@ public class JobService {
         return new PageImpl<>(pageSlice, pageable, items.size());
     }
 
-    private ClientContactDto resolveClientContact(JobListing job, UUID viewerId, String viewerRole) {
+    private ClientContactDto resolveClientContact(JobListing job, UUID viewerId, String viewerRole, boolean unlockedByMe) {
         if (viewerId == null || viewerRole == null) {
             return null;
         }
@@ -167,6 +183,9 @@ public class JobService {
             return userRepository.findById(job.getUserId()).map(DtoMapper::toClientContact).orElse(null);
         }
         if ("ROLE_CLIENT".equals(viewerRole) && job.getUserId().equals(viewerId)) {
+            return userRepository.findById(job.getUserId()).map(DtoMapper::toClientContact).orElse(null);
+        }
+        if ("ROLE_HANDYMAN".equals(viewerRole) && unlockedByMe) {
             return userRepository.findById(job.getUserId()).map(DtoMapper::toClientContact).orElse(null);
         }
         if ("ROLE_HANDYMAN".equals(viewerRole)
@@ -263,7 +282,10 @@ public class JobService {
     public DtoMapper.JobListingDto updateJob(UUID userId, UUID jobId, CreateJobRequest req) {
         JobListing job = getOwnedJob(userId, jobId);
         if (!"OPEN".equals(job.getStatus()) && !"PENDING_APPROVAL".equals(job.getStatus())) {
-            throw new IllegalArgumentException("Možete menjati samo poslove na čekanju ili otvorene poslove");
+            throw new IllegalArgumentException("Možete menjati samo otvorene poslove");
+        }
+        if (req.city() == null || req.city().isBlank()) {
+            throw new IllegalArgumentException("Grad je obavezan");
         }
         Category category = categoryRepository.findById(req.categoryId())
                 .orElseThrow(() -> new IllegalArgumentException("Kategorija nije pronađena"));
@@ -271,11 +293,16 @@ public class JobService {
         job.setCategory(category);
         job.setTitle(req.title());
         job.setDescription(req.description());
-        job.setAddress(req.address());
-        job.setCity(req.city());
-        applyJobLocation(job, req.locationPinned(), req.latitude(), req.longitude());
+        job.setCity(req.city().trim());
+        job.setAddress(null);
+        job.setLatitude(null);
+        job.setLongitude(null);
+        job.setLocationPinned(false);
         job.setImages(req.images());
         job.setAiScore(aiResult.score());
+        int suggestedTokenCost = Math.max(1, aiResult.score() * category.getBaseTokenCost());
+        job.setTokenCost(suggestedTokenCost);
+        job.setStatus("PENDING_APPROVAL");
         jobListingRepository.save(job);
         return DtoMapper.toJobDto(job, null, null, null, true);
     }
@@ -301,13 +328,11 @@ public class JobService {
         JobListing job = jobListingRepository.findById(jobId)
                 .orElseThrow(() -> new IllegalArgumentException("Posao nije pronađen"));
 
-        boolean allowed = "ROLE_CLIENT".equals(role) && job.getUserId().equals(userId)
-                || "ROLE_HANDYMAN".equals(role) && userId.equals(job.getSelectedHandymanId());
-        if (!allowed) {
-            throw new IllegalStateException("Nemate dozvolu da završite ovaj posao");
+        if (!"ROLE_CLIENT".equals(role) || !job.getUserId().equals(userId)) {
+            throw new IllegalStateException("Samo klijent može da završi oglas");
         }
-        if (!"IN_PROGRESS".equals(job.getStatus())) {
-            throw new IllegalArgumentException("Posao nije u toku");
+        if (!"OPEN".equals(job.getStatus()) && !"IN_PROGRESS".equals(job.getStatus())) {
+            throw new IllegalArgumentException("Posao nije aktivan");
         }
         job.setStatus("COMPLETED");
         job.setCompletedAt(Instant.now());
@@ -317,17 +342,7 @@ public class JobService {
         userRepository.findById(job.getUserId()).ifPresent(u ->
                 emailService.send(u.getEmail(), "Posao završen",
                         "Posao je označen kao završen. Ostavite recenziju: " + reviewLink));
-        if (job.getSelectedHandymanId() != null) {
-            handymanRepository.findById(job.getSelectedHandymanId()).ifPresent(h ->
-                    emailService.send(h.getEmail(), "Posao završen",
-                            "Posao je označen kao završen. Ostavite recenziju: " + reviewLink));
-        }
-        if ("ROLE_CLIENT".equals(role)) {
-            return toClientJobDto(job, userId);
-        }
-        ClientContactDto contact = userRepository.findById(job.getUserId())
-                .map(DtoMapper::toClientContact).orElse(null);
-        return DtoMapper.toJobDto(job, null, contact);
+        return toClientJobDto(job, userId);
     }
 
     private DtoMapper.JobListingDto toClientJobDto(JobListing job, UUID clientId) {
@@ -357,6 +372,9 @@ public class JobService {
     }
 
     private void assertHandymanCanViewJob(JobListing job, UUID handymanId) {
+        if (applicationService.hasUnlocked(handymanId, job.getId())) {
+            return;
+        }
         if ("OPEN".equals(job.getStatus())) {
             if (!isPublishedForHandymen(job)) {
                 throw new IllegalArgumentException("Posao nije pronađen");
@@ -387,29 +405,5 @@ public class JobService {
             return null;
         }
         return GeoUtils.haversineKm(userLat, userLon, job.getLatitude(), job.getLongitude());
-    }
-
-    private void applyJobLocation(JobListing job, Boolean locationPinned, Double latitude, Double longitude) {
-        boolean pinned = Boolean.TRUE.equals(locationPinned);
-        job.setLocationPinned(pinned);
-        if (pinned && latitude != null && longitude != null) {
-            job.setLatitude(latitude);
-            job.setLongitude(longitude);
-        } else if (!pinned) {
-            job.setLatitude(null);
-            job.setLongitude(null);
-        }
-    }
-
-    private boolean shouldHideExactLocation(JobListing job, UUID viewerId, String viewerRole) {
-        if (!"ROLE_HANDYMAN".equals(viewerRole) || viewerId == null) {
-            return false;
-        }
-        return !isAssignedHandyman(job, viewerId);
-    }
-
-    private boolean isAssignedHandyman(JobListing job, UUID handymanId) {
-        return handymanId.equals(job.getSelectedHandymanId())
-                && ("IN_PROGRESS".equals(job.getStatus()) || "COMPLETED".equals(job.getStatus()));
     }
 }

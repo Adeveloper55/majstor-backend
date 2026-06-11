@@ -97,9 +97,16 @@ public class JobController {
         return jobService.scorePreview(req);
     }
 
+    @PostMapping("/{id}/unlock")
+    public Map<String, Object> unlock(@PathVariable UUID id) {
+        securityUtils.requireRole("ROLE_HANDYMAN");
+        return applicationService.unlock(securityUtils.getCurrentUserId(), id);
+    }
+
     @PostMapping("/{id}/apply")
+    @Deprecated
     public Map<String, Object> apply(@PathVariable UUID id, @RequestBody(required = false) ApplyJobRequest req) {
         securityUtils.requireRole("ROLE_HANDYMAN");
-        return applicationService.apply(securityUtils.getCurrentUserId(), id, req);
+        return applicationService.unlock(securityUtils.getCurrentUserId(), id);
     }
 }

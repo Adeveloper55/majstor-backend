@@ -60,6 +60,13 @@ public final class DtoMapper {
     public static JobListingDto toJobDto(JobListing j, Double distance, ClientContactDto clientContact,
                                          HandymanContactDto assignedHandymanContact,
                                          boolean hideTokenCost, boolean hideExactLocation) {
+        return toJobDto(j, distance, clientContact, assignedHandymanContact, hideTokenCost, hideExactLocation, false);
+    }
+
+    public static JobListingDto toJobDto(JobListing j, Double distance, ClientContactDto clientContact,
+                                         HandymanContactDto assignedHandymanContact,
+                                         boolean hideTokenCost, boolean hideExactLocation,
+                                         boolean unlockedByMe) {
         Integer tokenCost = hideTokenCost ? null : j.getTokenCost();
         return new JobListingDto(
                 j.getId(), j.getUserId(), j.getCategory().getId(), toCategoryDto(j.getCategory()),
@@ -71,7 +78,7 @@ public final class DtoMapper {
                 hideExactLocation ? false : Boolean.TRUE.equals(j.getLocationPinned()),
                 j.getImages(), j.getAiScore(), tokenCost,
                 j.getStatus(), j.getSelectedHandymanId(), j.getCreatedAt(), distance, clientContact,
-                assignedHandymanContact);
+                assignedHandymanContact, unlockedByMe);
     }
 
     public static ClientContactDto toClientContact(User u) {
@@ -106,7 +113,8 @@ public final class DtoMapper {
                                 Integer aiScore, Integer tokenCost, String status,
                                 UUID selectedHandymanId, Instant createdAt, Double distance,
                                 ClientContactDto clientContact,
-                                HandymanContactDto assignedHandymanContact) {}
+                                HandymanContactDto assignedHandymanContact,
+                                Boolean unlockedByMe) {}
 
     public static AuthResponse buildAuthResponse(String token, UserPrincipal principal, Object userDto) {
         return new AuthResponse(token, principal.getRole(), userDto);

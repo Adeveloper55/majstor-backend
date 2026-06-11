@@ -108,7 +108,7 @@ public class AdminService {
         if (req.initialTokens() != null && req.initialTokens() > 0) {
             tokenService.adjustTokens(handyman.getId(), req.initialTokens(), "Početni tokeni (admin)");
         }
-        emailService.send(handyman.getEmail(), "Dobrodošli na Majstor na klik",
+        emailService.sendSafely(handyman.getEmail(), "Dobrodošli na Majstor na klik",
                 "Admin je kreirao vaš nalog majstora. Prijavite se sa emailom i lozinkom koju vam je admin dao.");
         return DtoMapper.toHandymanDto(handymanRepository.findById(handyman.getId()).orElseThrow());
     }
@@ -166,8 +166,9 @@ public class AdminService {
         job.setStatus("OPEN");
         jobListingRepository.save(job);
         userRepository.findById(job.getUserId()).ifPresent(u ->
-                emailService.send(u.getEmail(), "Oglas odobren",
-                        "Vaš oglas \"" + job.getTitle() + "\" je odobren i sada je vidljiv majstorima."));
+                emailService.send(u.getEmail(), "Oglas odobren — sada je vidljiv",
+                        "Admin je odobrio vaš oglas \"" + job.getTitle() + "\" sa cenom od "
+                                + req.tokenCost() + " tokena. Oglas je sada vidljiv majstorima i izvođačima i mogu da kupe kontakt."));
         return getJob(id);
     }
 
@@ -183,23 +184,28 @@ public class AdminService {
         jobListingRepository.deleteById(id);
     }
 
+    @Transactional(readOnly = true)
     public Page<Map<String, Object>> listTokenRequests(String status, Pageable pageable) {
         Page<TokenPurchaseRequest> page = status != null && !status.isBlank()
-                ? requestRepository.findByStatus(status, pageable)
-                : requestRepository.findAllByOrderByCreatedAtDesc(pageable);
-        return page.map(r -> {
-            Map<String, Object> m = new HashMap<>();
-            m.put("id", r.getId());
-            m.put("handyman", DtoMapper.toHandymanPublicDto(r.getHandyman()));
-            m.put("handymanEmail", r.getHandyman().getEmail());
-            m.put("tokenAmount", r.getTokenAmount());
-            m.put("amountExpected", r.getAmountExpected());
-            m.put("paymentReference", r.getPaymentReference());
-            m.put("status", r.getStatus());
-            m.put("adminNote", r.getAdminNote());
-            m.put("createdAt", r.getCreatedAt());
-            return m;
-        });
+                ? requestRepository.findByStatusWithHandyman(status, pageable)
+                : requestRepository.findAllWithHandyman(pageable);
+        return page.map(this::toTokenRequestAdminDto);
+    }
+
+    private Map<String, Object> toTokenRequestAdminDto(TokenPurchaseRequest r) {
+        Handyman handyman = r.getHandyman();
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", r.getId());
+        m.put("handyman", DtoMapper.toHandymanPublicDto(handyman));
+        m.put("handymanEmail", handyman.getEmail());
+        m.put("tokenAmount", r.getTokenAmount());
+        m.put("amountExpected", r.getAmountExpected());
+        m.put("paymentReference", r.getPaymentReference() != null ? r.getPaymentReference() : "");
+        m.put("status", r.getStatus());
+        m.put("adminNote", r.getAdminNote());
+        m.put("createdAt", r.getCreatedAt());
+        m.put("predracunSentAt", r.getPredracunSentAt());
+        return m;
     }
 
     public Page<Review> listReviews(Pageable pageable) {
@@ -217,9 +223,10 @@ public class AdminService {
         stats.put("totalHandymen", handymanRepository.count());
         stats.put("totalJobs", jobListingRepository.count());
         stats.put("openJobs", jobListingRepository.findByStatus("OPEN", Pageable.unpaged()).getTotalElements());
-        stats.put("pendingJobApprovals", jobListingRepository.findByStatus("PENDING_APPROVAL", Pageable.unpaged()).getTotalElements());
+        stats.put("pendingJobs", jobListingRepository.findByStatus("PENDING_APPROVAL", Pageable.unpaged()).getTotalElements());
         stats.put("pendingTokenRequests", requestRepository.findByStatus("PENDING", Pageable.unpaged()).getTotalElements());
-        stats.put("pendingJobApplications", jobApplicationRepository.countByStatus("PENDING"));
+        stats.put("unlockedLeads", jobApplicationRepository.countByStatus("UNLOCKED")
+                + jobApplicationRepository.countByStatus("ACCEPTED"));
         stats.put("totalReviews", reviewRepository.count());
         stats.put("newContactMessages", contactMessageRepository.countByStatus("NEW"));
         stats.put("pendingCompanyRegistrations", companyRegistrationRepository.countByStatus("PENDING"));
@@ -236,5 +243,9 @@ public class AdminService {
 
     public void rejectTokenRequest(UUID id, String note) {
         tokenService.rejectRequest(id, note);
+    }
+
+    public void sendTokenPredracun(UUID id) {
+        tokenService.sendPredracun(id);
     }
 }

@@ -25,4 +25,10 @@ public interface JobApplicationRepository extends JpaRepository<JobApplication, 
     Page<JobApplication> findByStatusOrderByAppliedAtDesc(String status, Pageable pageable);
 
     long countByStatus(String status);
+
+    @Query("SELECT a FROM JobApplication a JOIN FETCH a.handyman WHERE a.handyman.id = :handymanId AND a.status IN ('UNLOCKED', 'ACCEPTED') ORDER BY a.appliedAt DESC")
+    List<JobApplication> findUnlockedByHandymanId(@Param("handymanId") UUID handymanId);
+
+    @Query("SELECT a FROM JobApplication a WHERE a.handyman.id = :handymanId AND a.status IN ('UNLOCKED', 'ACCEPTED') ORDER BY a.appliedAt DESC")
+    Page<JobApplication> findUnlockedByHandymanId(@Param("handymanId") UUID handymanId, Pageable pageable);
 }

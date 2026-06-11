@@ -1,6 +1,6 @@
 package com.majstornaklik.service;
 
-import com.majstornaklik.dto.ApplyJobRequest;
+import com.majstornaklik.dto.ClientContactDto;
 import com.majstornaklik.dto.DtoMapper;
 import com.majstornaklik.entity.*;
 import com.majstornaklik.repository.*;
@@ -24,44 +24,56 @@ public class ApplicationService {
     private final HandymanRepository handymanRepository;
     private final UserRepository userRepository;
     private final TokenTransactionRepository tokenTransactionRepository;
-    private final EmailService emailService;
     private final HandymanCategoryService handymanCategoryService;
 
     @Transactional
-    public Map<String, Object> apply(UUID handymanId, UUID jobId, ApplyJobRequest req) {
-        JobListing job = jobListingRepository.findById(jobId)
+    public Map<String, Object> unlock(UUID handymanId, UUID jobId) {
+        JobListing job = jobListingRepository.findByIdWithCategory(jobId)
                 .orElseThrow(() -> new IllegalArgumentException("Posao nije pronađen"));
         if (!"OPEN".equals(job.getStatus())) {
-            throw new IllegalArgumentException("Posao nije otvoren za prijave");
+            throw new IllegalArgumentException("Posao nije dostupan");
         }
         if (job.getTokenCost() == null || job.getTokenCost() <= 0) {
-            throw new IllegalArgumentException("Posao još nije odobren za prijave");
-        }
-        if (applicationRepository.existsByJobListingIdAndHandymanId(jobId, handymanId)) {
-            throw new IllegalArgumentException("Već ste se prijavili na ovaj posao");
+            throw new IllegalArgumentException("Posao nije dostupan za otključavanje");
         }
 
         Handyman handyman = handymanRepository.findById(handymanId)
                 .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
         handymanCategoryService.assertCanAccessJobCategory(handyman, job.getCategory().getId());
-        if (handyman.getTokenBalance() < job.getTokenCost()) {
-            throw new IllegalArgumentException("Nemate dovoljno tokena za ovaj posao. Pošaljite zahtev za dopunu.");
+
+        var existing = applicationRepository.findByJobListingIdAndHandymanId(jobId, handymanId);
+        if (existing.isPresent()) {
+            JobApplication app = existing.get();
+            if (isUnlockedStatus(app.getStatus())) {
+                return buildUnlockResponse(app, job);
+            }
+            throw new IllegalArgumentException("Već imate zabeležen zahtev za ovaj posao");
         }
+
+        if (handyman.getTokenBalance() < job.getTokenCost()) {
+            throw new IllegalArgumentException("Nemate dovoljno tokena. Pošaljite zahtev za dopunu u sekciji Tokeni.");
+        }
+
+        handyman.setTokenBalance(handyman.getTokenBalance() - job.getTokenCost());
+        handymanRepository.save(handyman);
 
         JobApplication application = JobApplication.builder()
                 .jobListingId(jobId)
                 .handyman(handyman)
-                .tokensSpent(0)
-                .coverMessage(req != null ? req.coverMessage() : null)
-                .status("PENDING")
+                .tokensSpent(job.getTokenCost())
+                .status("UNLOCKED")
                 .build();
         applicationRepository.save(application);
 
-        emailService.sendToAdmin("Nova prijava na posao",
-                "Majstor " + handyman.getFullName() + " se prijavio na oglas: " + job.getTitle()
-                        + " (" + job.getTokenCost() + " tokena). Pregledajte u admin panelu → Zahtevi za posao.");
+        tokenTransactionRepository.save(TokenTransaction.builder()
+                .handymanId(handymanId)
+                .jobApplicationId(application.getId())
+                .amount(-job.getTokenCost())
+                .type("DEDUCTED")
+                .description("Otključan kontakt: " + job.getTitle())
+                .build());
 
-        return Map.of("id", application.getId(), "status", application.getStatus());
+        return buildUnlockResponse(application, job);
     }
 
     @Transactional(readOnly = true)
@@ -76,8 +88,22 @@ public class ApplicationService {
 
     @Transactional(readOnly = true)
     public Page<Map<String, Object>> listForHandyman(UUID handymanId, Pageable pageable) {
-        return applicationRepository.findByHandymanIdWithHandyman(handymanId, pageable)
+        return applicationRepository.findUnlockedByHandymanId(handymanId, pageable)
                 .map(this::toHandymanApplicationDto);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DtoMapper.JobListingDto> listUnlockedJobsForHandyman(UUID handymanId) {
+        return applicationRepository.findUnlockedByHandymanId(handymanId).stream()
+                .map(app -> jobListingRepository.findByIdWithCategory(app.getJobListingId()))
+                .flatMap(java.util.Optional::stream)
+                .map(j -> {
+                    ClientContactDto contact = userRepository.findById(j.getUserId())
+                            .map(DtoMapper::toClientContact)
+                            .orElse(null);
+                    return DtoMapper.toJobDto(j, null, contact, null, false, true, true);
+                })
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -88,21 +114,12 @@ public class ApplicationService {
 
     @Transactional
     public void assignHandymanByAdmin(UUID jobId, UUID handymanId) {
-        JobListing job = jobListingRepository.findById(jobId)
-                .orElseThrow(() -> new IllegalArgumentException("Posao nije pronađen"));
-        assignHandymanToJob(job, handymanId);
+        throw new UnsupportedOperationException("Dodela majstora više nije podržana — majstori kupuju kontakt direktno.");
     }
 
     @Transactional
     public void assignByApplicationId(UUID applicationId) {
-        JobApplication app = applicationRepository.findById(applicationId)
-                .orElseThrow(() -> new IllegalArgumentException("Zahtev nije pronađen"));
-        if (!"PENDING".equals(app.getStatus())) {
-            throw new IllegalArgumentException("Zahtev je već obrađen");
-        }
-        JobListing job = jobListingRepository.findById(app.getJobListingId())
-                .orElseThrow(() -> new IllegalArgumentException("Posao nije pronađen"));
-        assignHandymanToJob(job, app.getHandyman().getId());
+        throw new UnsupportedOperationException("Dodela majstora više nije podržana — majstori kupuju kontakt direktno.");
     }
 
     @Transactional(readOnly = true)
@@ -112,68 +129,22 @@ public class ApplicationService {
         return applicationRepository.findByJobListingId(jobId, pageable).map(this::toDto);
     }
 
-    private void assignHandymanToJob(JobListing job, UUID handymanId) {
-        if (!"OPEN".equals(job.getStatus())) {
-            throw new IllegalArgumentException("Posao nije otvoren za dodelu");
-        }
+    public boolean hasUnlocked(UUID handymanId, UUID jobId) {
+        return applicationRepository.findByJobListingIdAndHandymanId(jobId, handymanId)
+                .map(a -> isUnlockedStatus(a.getStatus()))
+                .orElse(false);
+    }
 
-        Handyman handyman = handymanRepository.findById(handymanId)
-                .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
-
-        JobApplication selected = applicationRepository
-                .findByJobListingIdAndHandymanId(job.getId(), handymanId)
-                .orElseThrow(() -> new IllegalArgumentException("Majstor se mora prvo prijaviti na posao"));
-
-        if (!"PENDING".equals(selected.getStatus())) {
-            throw new IllegalArgumentException("Zahtev majstora je već obrađen");
-        }
-
-        if (handyman.getTokenBalance() < job.getTokenCost()) {
-            throw new IllegalArgumentException("Majstor nema dovoljno tokena (" + handyman.getTokenBalance()
-                    + "). Potrebno: " + job.getTokenCost());
-        }
-
-        handyman.setTokenBalance(handyman.getTokenBalance() - job.getTokenCost());
-        handymanRepository.save(handyman);
-
-        selected.setStatus("ACCEPTED");
-        selected.setTokensSpent(job.getTokenCost());
-        applicationRepository.save(selected);
-
-        tokenTransactionRepository.save(TokenTransaction.builder()
-                .handymanId(handymanId)
-                .jobApplicationId(selected.getId())
-                .amount(-job.getTokenCost())
-                .type("DEDUCTED")
-                .description("Odobren posao: " + job.getTitle())
-                .build());
-
-        job.setStatus("IN_PROGRESS");
-        job.setSelectedHandymanId(handymanId);
-        jobListingRepository.save(job);
-
-        applicationRepository.findByJobListingId(job.getId()).stream()
-                .filter(a -> !a.getHandyman().getId().equals(handymanId))
-                .forEach(a -> {
-                    a.setStatus("REJECTED");
-                    applicationRepository.save(a);
-                });
-
-        userRepository.findById(job.getUserId()).ifPresent(client -> {
-            emailService.send(handyman.getEmail(), "Dodeljen vam je posao",
-                    "Posao: " + job.getTitle() + "\nSkinuto tokena: " + job.getTokenCost()
-                            + "\nKontakt klijenta: " + client.getFullName()
-                            + " | " + client.getEmail() + " | " + (client.getPhone() != null ? client.getPhone() : "—")
-                            + "\nAdresa: " + (job.getAddress() != null ? job.getAddress() : "—") + ", " + (job.getCity() != null ? job.getCity() : "—"));
-            emailService.send(client.getEmail(), "Majstor dodeljen na posao",
-                    "Majstor " + handyman.getFullName() + " je dodeljen na vaš posao.\nKontakt: "
-                            + handyman.getEmail() + " / " + (handyman.getPhone() != null ? handyman.getPhone() : "—"));
-        });
+    public List<UUID> findUnlockedJobIds(UUID handymanId) {
+        return applicationRepository.findUnlockedByHandymanId(handymanId).stream()
+                .map(JobApplication::getJobListingId)
+                .toList();
     }
 
     public List<Map<String, Object>> listRecentForClient(UUID clientId) {
         return jobListingRepository.findByUserId(clientId, PageRequest.of(0, 50)).getContent().stream()
                 .flatMap(job -> applicationRepository.findByJobListingId(job.getId()).stream()
+                        .filter(a -> isUnlockedStatus(a.getStatus()))
                         .map(app -> {
                             Map<String, Object> dto = new java.util.HashMap<>(toDto(app));
                             dto.put("jobTitle", job.getTitle());
@@ -183,6 +154,23 @@ public class ApplicationService {
                 .sorted((a, b) -> ((java.time.Instant) b.get("appliedAt")).compareTo((java.time.Instant) a.get("appliedAt")))
                 .limit(10)
                 .toList();
+    }
+
+    private Map<String, Object> buildUnlockResponse(JobApplication application, JobListing job) {
+        ClientContactDto contact = userRepository.findById(job.getUserId())
+                .map(DtoMapper::toClientContact)
+                .orElse(null);
+        Map<String, Object> result = new java.util.HashMap<>();
+        result.put("id", application.getId());
+        result.put("status", application.getStatus());
+        result.put("tokensSpent", application.getTokensSpent());
+        result.put("city", job.getCity());
+        result.put("clientContact", contact);
+        return result;
+    }
+
+    private boolean isUnlockedStatus(String status) {
+        return "UNLOCKED".equals(status) || "ACCEPTED".equals(status);
     }
 
     private Map<String, Object> toAdminApplicationDto(JobApplication app) {

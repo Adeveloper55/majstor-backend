@@ -32,7 +32,7 @@ public interface JobListingRepository extends JpaRepository<JobListing, UUID> {
     @Query("SELECT j FROM JobListing j JOIN FETCH j.category WHERE j.selectedHandymanId = :handymanId ORDER BY j.createdAt DESC")
     List<JobListing> findBySelectedHandymanIdWithCategory(@Param("handymanId") UUID handymanId);
 
-    /** Samo admin-odobreni oglasi vidljivi majstorima */
+    /** Samo admin-odobreni oglasi vidljivi majstorima i izvođačima */
     @Query("SELECT j FROM JobListing j JOIN FETCH j.category WHERE j.status = 'OPEN' AND j.tokenCost > 0")
     List<JobListing> findAllAdminApprovedOpen();
 }

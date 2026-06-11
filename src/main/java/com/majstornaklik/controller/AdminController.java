@@ -142,6 +142,11 @@ public class AdminController {
         adminService.rejectTokenRequest(id, req != null ? req.adminNote() : null);
     }
 
+    @PostMapping("/token-requests/{id}/send-predracun")
+    public void sendTokenPredracun(@PathVariable UUID id) {
+        adminService.sendTokenPredracun(id);
+    }
+
     @GetMapping("/stats")
     public Map<String, Object> stats() {
         return adminService.getStats();

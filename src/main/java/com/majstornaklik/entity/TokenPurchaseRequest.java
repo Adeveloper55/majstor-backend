@@ -48,6 +48,9 @@ public class TokenPurchaseRequest {
     @Column(name = "processed_at")
     private Instant processedAt;
 
+    @Column(name = "predracun_sent_at")
+    private Instant predracunSentAt;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

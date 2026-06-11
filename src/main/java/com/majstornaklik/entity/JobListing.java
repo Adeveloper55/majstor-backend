@@ -58,7 +58,7 @@ public class JobListing {
 
     @Column(length = 30)
     @Builder.Default
-    private String status = "PENDING_APPROVAL";
+    private String status = "OPEN";
 
     @Column(name = "selected_handyman_id")
     private UUID selectedHandymanId;
