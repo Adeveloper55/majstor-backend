@@ -69,6 +69,11 @@ public class HandymanController {
             h.setPib(pib);
         }
         if (body.containsKey("categoryIds")) {
+            List<Integer> existing = handymanCategoryService.getCategoryIds(h);
+            if (!existing.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Kategorije poslova se ne mogu menjati nakon registracije. Kontaktirajte podršku.");
+            }
             h.setCategoryIdsJson(handymanCategoryService.toJson(parseCategoryIds(body.get("categoryIds"))));
         }
         return DtoMapper.toHandymanDto(handymanRepository.save(h));
