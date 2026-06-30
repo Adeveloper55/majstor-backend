@@ -1,7 +1,6 @@
 package com.majstornaklik.controller;
 
 import com.majstornaklik.dto.*;
-import com.majstornaklik.security.SecurityUtils;
 import com.majstornaklik.service.AuthService;
 import com.majstornaklik.service.CompanyRegistrationService;
 import jakarta.validation.Valid;
@@ -15,7 +14,6 @@ public class AuthController {
 
     private final AuthService authService;
     private final CompanyRegistrationService companyRegistrationService;
-    private final SecurityUtils securityUtils;
 
     @PostMapping("/register/client")
     public RegisterPendingResponse registerClient(@Valid @RequestBody RegisterClientRequest req) {
@@ -38,8 +36,15 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public AuthResponse refresh() {
-        return authService.refresh(securityUtils.getCurrentUser());
+    public AuthResponse refresh(@Valid @RequestBody RefreshTokenRequest req) {
+        return authService.refreshWithToken(req.refreshToken());
+    }
+
+    @PostMapping("/logout")
+    public void logout(@RequestBody(required = false) LogoutRequest req) {
+        if (req != null) {
+            authService.logout(req.refreshToken());
+        }
     }
 
     @PostMapping("/forgot-password")

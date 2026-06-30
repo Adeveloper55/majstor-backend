@@ -116,7 +116,7 @@ public final class DtoMapper {
                                 HandymanContactDto assignedHandymanContact,
                                 Boolean unlockedByMe) {}
 
-    public static AuthResponse buildAuthResponse(String token, UserPrincipal principal, Object userDto) {
-        return new AuthResponse(token, principal.getRole(), userDto);
+    public static AuthResponse buildAuthResponse(String token, String refreshToken, UserPrincipal principal, Object userDto) {
+        return new AuthResponse(token, refreshToken, principal.getRole(), userDto);
     }
 }
