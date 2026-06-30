@@ -3,13 +3,14 @@
 
 spring.datasource.password=YOUR_POSTGRES_PASSWORD
 
-# SMTP (Webhosting Srbija cPanel)
-spring.mail.host=mail.tvojmajstornaklik.com
+# SMTP — Namecheap Private Email
+spring.mail.host=mail.privateemail.com
 spring.mail.port=587
-spring.mail.username=contact@tvojmajstornaklik.com
+spring.mail.username=contact@majstor365.com
 spring.mail.password=YOUR_MAIL_PASSWORD
 spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true
+spring.mail.properties.mail.smtp.starttls.required=true
 
-app.mail.from=contact@tvojmajstornaklik.com
-app.mail.admin=contact@tvojmajstornaklik.com
+app.mail.from=contact@majstor365.com
+app.mail.admin=contact@majstor365.com

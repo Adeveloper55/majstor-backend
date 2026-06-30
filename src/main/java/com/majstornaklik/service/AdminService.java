@@ -108,7 +108,7 @@ public class AdminService {
         if (req.initialTokens() != null && req.initialTokens() > 0) {
             tokenService.adjustTokens(handyman.getId(), req.initialTokens(), "Početni tokeni (admin)");
         }
-        emailService.sendSafely(handyman.getEmail(), "Dobrodošli na Majstor na klik",
+        emailService.sendSafely(handyman.getEmail(), "Dobrodošli na Majstor 365",
                 "Admin je kreirao vaš nalog majstora. Prijavite se sa emailom i lozinkom koju vam je admin dao.");
         return DtoMapper.toHandymanDto(handymanRepository.findById(handyman.getId()).orElseThrow());
     }

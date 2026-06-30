@@ -15,7 +15,7 @@
     <artifactId>backend</artifactId>
     <version>1.0.0</version>
     <name>majstor-na-klik-backend</name>
-    <description>Majstor na klik marketplace backend</description>
+    <description>Majstor 365 marketplace backend</description>
 
     <properties>
         <java.version>17</java.version>

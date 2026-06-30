@@ -19,10 +19,10 @@ public class EmailService {
     @Value("${spring.mail.username:}")
     private String fromEmail;
 
-    @Value("${app.mail.from:contact@tvojmajstornaklik.com}")
+    @Value("${app.mail.from:contact@majstor365.com}")
     private String appFrom;
 
-    @Value("${app.mail.admin:contact@tvojmajstornaklik.com}")
+    @Value("${app.mail.admin:contact@majstor365.com}")
     private String adminEmail;
 
     public EmailService(JavaMailSender mailSender) {

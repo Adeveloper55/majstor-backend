@@ -172,10 +172,10 @@ public class AuthService {
         resetTokenRepository.save(resetToken);
         String link = frontendUrl + "/reset-password?token=" + token;
         try {
-            emailService.send(email, "Reset lozinke — Majstor na klik",
+            emailService.send(email, "Reset lozinke — Majstor 365",
                     "Poštovani,\n\nPrimili smo zahtev za reset lozinke.\n\n"
                             + "Kliknite na link da postavite novu lozinku:\n" + link
-                            + "\n\nLink važi 1 sat. Ako niste vi tražili reset, ignorišite ovaj email.\n\nMajstor na klik");
+                            + "\n\nLink važi 1 sat. Ako niste vi tražili reset, ignorišite ovaj email.\n\nMajstor 365");
         } catch (Exception e) {
             log.error("[RESET] Greška pri slanju na {}: {}", email, e.getMessage());
             throw new IllegalStateException("Email nije poslat. Pokušajte ponovo za nekoliko minuta.");

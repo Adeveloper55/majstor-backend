@@ -58,20 +58,20 @@ public class EmailVerificationService {
 
         String link = frontendUrl + "/verify-email?token=" + token;
         String body = switch (role) {
-            case ROLE_CLIENT -> "Poštovani,\n\nHvala na registraciji na Majstor na klik.\n\n"
+            case ROLE_CLIENT -> "Poštovani,\n\nHvala na registraciji na Majstor 365.\n\n"
                     + "Kliknite na link da potvrdite email i aktivirate nalog:\n" + link
-                    + "\n\nLink važi 24 sata.\n\nMajstor na klik";
-            case ROLE_HANDYMAN -> "Poštovani,\n\nHvala na registraciji majstora na Majstor na klik.\n\n"
+                    + "\n\nLink važi 24 sata.\n\nMajstor 365";
+            case ROLE_HANDYMAN -> "Poštovani,\n\nHvala na registraciji majstora na Majstor 365.\n\n"
                     + "Kliknite na link da potvrdite email i aktivirate nalog:\n" + link
-                    + "\n\nLink važi 24 sata.\n\nMajstor na klik";
-            case ROLE_COMPANY -> "Poštovani,\n\nHvala na prijavi preduzeća na Majstor na klik.\n\n"
+                    + "\n\nLink važi 24 sata.\n\nMajstor 365";
+            case ROLE_COMPANY -> "Poštovani,\n\nHvala na prijavi preduzeća na Majstor 365.\n\n"
                     + "Kliknite na link da potvrdite email:\n" + link
-                    + "\n\nNakon potvrde, admin će pregledati vašu prijavu.\nLink važi 24 sata.\n\nMajstor na klik";
+                    + "\n\nNakon potvrde, admin će pregledati vašu prijavu.\nLink važi 24 sata.\n\nMajstor 365";
             default -> "Potvrdite email klikom na link:\n" + link;
         };
 
         try {
-            emailService.send(normalized, "Potvrdite email — Majstor na klik", body);
+            emailService.send(normalized, "Potvrdite email — Majstor 365", body);
             log.info("[VERIFY] Email poslat na {} | {}", normalized, link);
         } catch (Exception e) {
             log.error("[VERIFY] Greška pri slanju na {}: {}", normalized, e.getMessage());
@@ -208,7 +208,7 @@ public class EmailVerificationService {
 
         emailService.send(req.getEmail(), "Email potvrđen — prijava preduzeća",
                 "Poštovani,\n\nVaš email je potvrđen.\nAdmin će pregledati prijavu preduzeća \""
-                        + req.getCompanyName() + "\" i obavestićemo vas o odluci.\n\nMajstor na klik");
+                        + req.getCompanyName() + "\" i obavestićemo vas o odluci.\n\nMajstor 365");
 
         return EmailVerificationResponse.of("VERIFIED",
                 "Email je potvrđen. Admin će pregledati prijavu preduzeća i obavestićemo vas emailom.");
