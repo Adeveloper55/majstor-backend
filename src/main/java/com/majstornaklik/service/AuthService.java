@@ -43,6 +43,7 @@ public class AuthService {
     private final PhoneUniquenessService phoneUniquenessService;
     private final CustomUserDetailsService userDetailsService;
     private final PrimaryAdminAuthorization primaryAdminAuthorization;
+    private final CompanyRegistrationRepository companyRegistrationRepository;
 
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
@@ -105,7 +106,32 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest req) {
-        return loginInternal(req.email().trim().toLowerCase(), req.password());
+        String email = req.email().trim().toLowerCase();
+        assertCompanyRegistrationLogin(email, req.password());
+        return loginInternal(email, req.password());
+    }
+
+    private void assertCompanyRegistrationLogin(String email, String rawPassword) {
+        if (userRepository.existsByEmail(email)
+                || handymanRepository.existsByEmail(email)
+                || adminRepository.existsByEmail(email)) {
+            return;
+        }
+
+        companyRegistrationRepository.findTopByEmailAndStatusOrderByCreatedAtDesc(email, "PENDING")
+                .ifPresent(req -> {
+                    if (!passwordEncoder.matches(rawPassword, req.getPasswordHash())) {
+                        throw new org.springframework.security.authentication.BadCredentialsException(
+                                "Pogrešan email ili lozinka");
+                    }
+                    if (!Boolean.TRUE.equals(req.getEmailVerified())) {
+                        throw new IllegalStateException(
+                                "Email preduzeća nije potvrđen. Proverite inbox i kliknite na link za verifikaciju.");
+                    }
+                    throw new IllegalStateException(
+                            "Prijava preduzeća \"" + req.getCompanyName()
+                                    + "\" čeka odobrenje admina. Obavestićemo vas emailom kada nalog bude aktivan.");
+                });
     }
 
     private AuthResponse loginInternal(String email, String password) {
@@ -262,6 +288,13 @@ public class AuthService {
                 a.setPasswordHash(hash);
                 adminRepository.save(a);
             });
+            case EmailVerificationService.ROLE_COMPANY_REGISTRATION ->
+                    companyRegistrationRepository
+                            .findTopByEmailAndStatusOrderByCreatedAtDesc(resetToken.getEmail(), "PENDING")
+                            .ifPresent(registration -> {
+                                registration.setPasswordHash(hash);
+                                companyRegistrationRepository.save(registration);
+                            });
             default -> throw new IllegalArgumentException("Nepoznata uloga");
         }
         resetToken.setUsed(true);
@@ -272,6 +305,9 @@ public class AuthService {
         if (userRepository.findByEmail(email).isPresent()) return "ROLE_CLIENT";
         if (handymanRepository.findByEmail(email).isPresent()) return "ROLE_HANDYMAN";
         if (adminRepository.findByEmail(email).isPresent()) return "ROLE_ADMIN";
+        if (companyRegistrationRepository.findTopByEmailAndStatusOrderByCreatedAtDesc(email, "PENDING").isPresent()) {
+            return EmailVerificationService.ROLE_COMPANY_REGISTRATION;
+        }
         return null;
     }
 }

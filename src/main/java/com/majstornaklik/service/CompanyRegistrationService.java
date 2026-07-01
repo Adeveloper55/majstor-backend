@@ -8,6 +8,7 @@ import com.majstornaklik.entity.Handyman;
 import com.majstornaklik.repository.CompanyRegistrationRepository;
 import com.majstornaklik.repository.HandymanRepository;
 import com.majstornaklik.repository.UserRepository;
+import com.majstornaklik.util.CityUtils;
 import com.majstornaklik.util.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -131,7 +132,7 @@ public class CompanyRegistrationService {
                 .passwordHash(req.getPasswordHash())
                 .phone(req.getNormalizedPhone())
                 .phoneNormalized(req.getNormalizedPhone())
-                .city(req.getCity())
+                .city(resolveHandymanCity(req))
                 .bio(bio)
                 .companyName(req.getCompanyName())
                 .pib(req.getPib())
@@ -184,6 +185,15 @@ public class CompanyRegistrationService {
 
     public long countPending() {
         return repository.countByStatus("PENDING");
+    }
+
+    private String resolveHandymanCity(CompanyRegistrationRequest req) {
+        String city = req.getCity();
+        if (city != null && !city.isBlank() && !"Drugo".equalsIgnoreCase(city.trim())) {
+            return city.trim();
+        }
+        return CityUtils.inferCityFromDistricts(JsonUtils.parseStringList(req.getSelectedDistricts()))
+                .orElse(city != null ? city.trim() : null);
     }
 
     private String buildBio(CompanyRegistrationRequest req) {

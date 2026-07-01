@@ -21,6 +21,8 @@ public interface CompanyRegistrationRepository extends JpaRepository<CompanyRegi
     Optional<CompanyRegistrationRequest> findTopByEmailAndStatusAndEmailVerifiedFalseOrderByCreatedAtDesc(
             String email, String status);
 
+    Optional<CompanyRegistrationRequest> findTopByEmailAndStatusOrderByCreatedAtDesc(String email, String status);
+
     Page<CompanyRegistrationRequest> findByStatusAndEmailVerifiedTrueOrderByCreatedAtDesc(String status, Pageable pageable);
 
     Page<CompanyRegistrationRequest> findByEmailVerifiedTrueOrderByCreatedAtDesc(Pageable pageable);

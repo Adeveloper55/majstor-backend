@@ -27,6 +27,7 @@ public class EmailVerificationService {
     public static final String ROLE_CLIENT = "ROLE_CLIENT";
     public static final String ROLE_HANDYMAN = "ROLE_HANDYMAN";
     public static final String ROLE_COMPANY = "ROLE_COMPANY";
+    public static final String ROLE_COMPANY_REGISTRATION = "ROLE_COMPANY_REGISTRATION";
 
     private static final long EXPIRY_SECONDS = 86400;
     private static final String STALE_MSG =
@@ -109,8 +110,20 @@ public class EmailVerificationService {
             case ROLE_CLIENT -> verifyClient(email, verificationToken);
             case ROLE_HANDYMAN -> verifyHandyman(email, verificationToken);
             case ROLE_COMPANY -> verifyCompany(verificationToken);
-            default -> EmailVerificationResponse.of("INVALID", "Nepoznat tip verifikacije.");
+            default -> EmailVerificationResponse.of("INVALID", "Nepoznat tip verifikacije.", null);
         };
+    }
+
+    private EmailVerificationResponse companyResponse(String status, String message) {
+        return EmailVerificationResponse.of(status, message, ROLE_COMPANY);
+    }
+
+    private EmailVerificationResponse clientResponse(String status, String message) {
+        return EmailVerificationResponse.of(status, message, ROLE_CLIENT);
+    }
+
+    private EmailVerificationResponse handymanResponse(String status, String message) {
+        return EmailVerificationResponse.of(status, message, ROLE_HANDYMAN);
     }
 
     private EmailVerificationResponse resolveUsedToken(EmailVerificationToken verificationToken) {
@@ -120,18 +133,18 @@ public class EmailVerificationService {
         return switch (role) {
             case ROLE_CLIENT -> userRepository.findByEmail(email)
                     .filter(u -> Boolean.TRUE.equals(u.getEmailVerified()))
-                    .map(u -> EmailVerificationResponse.of("ALREADY_VERIFIED",
+                    .map(u -> clientResponse("ALREADY_VERIFIED",
                             "Email je već potvrđen. Možete se prijaviti."))
                     .orElse(EmailVerificationResponse.of("STALE_LINK", STALE_MSG));
             case ROLE_HANDYMAN -> handymanRepository.findByEmail(email)
                     .filter(h -> Boolean.TRUE.equals(h.getEmailVerified()))
-                    .map(h -> EmailVerificationResponse.of("ALREADY_VERIFIED",
+                    .map(h -> handymanResponse("ALREADY_VERIFIED",
                             "Email je već potvrđen. Možete se prijaviti."))
                     .orElse(EmailVerificationResponse.of("STALE_LINK", STALE_MSG));
             case ROLE_COMPANY -> companyRegistrationRepository.findById(verificationToken.getReferenceId())
                     .filter(req -> Boolean.TRUE.equals(req.getEmailVerified()))
-                    .map(req -> EmailVerificationResponse.of("ALREADY_VERIFIED",
-                            "Email je već potvrđen. Admin će pregledati vašu prijavu."))
+                    .map(req -> companyResponse("ALREADY_VERIFIED",
+                            "Email je već potvrđen. Admin će pregledati vašu prijavu preduzeća."))
                     .orElse(EmailVerificationResponse.of("STALE_LINK", STALE_MSG));
             default -> EmailVerificationResponse.of("INVALID", "Nepoznat tip verifikacije.");
         };
@@ -165,12 +178,12 @@ public class EmailVerificationService {
                 .orElseThrow(() -> new IllegalArgumentException("Korisnik nije pronađen"));
         if (Boolean.TRUE.equals(user.getEmailVerified())) {
             markUsed(token);
-            return EmailVerificationResponse.of("ALREADY_VERIFIED", "Email je već potvrđen. Možete se prijaviti.");
+            return clientResponse("ALREADY_VERIFIED", "Email je već potvrđen. Možete se prijaviti.");
         }
         user.setEmailVerified(true);
         userRepository.save(user);
         markUsed(token);
-        return EmailVerificationResponse.of("VERIFIED",
+        return clientResponse("VERIFIED",
                 "Email je uspešno potvrđen. Sada se možete prijaviti na nalog.");
     }
 
@@ -179,12 +192,12 @@ public class EmailVerificationService {
                 .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
         if (Boolean.TRUE.equals(handyman.getEmailVerified())) {
             markUsed(token);
-            return EmailVerificationResponse.of("ALREADY_VERIFIED", "Email je već potvrđen. Možete se prijaviti.");
+            return handymanResponse("ALREADY_VERIFIED", "Email je već potvrđen. Možete se prijaviti.");
         }
         handyman.setEmailVerified(true);
         handymanRepository.save(handyman);
         markUsed(token);
-        return EmailVerificationResponse.of("VERIFIED",
+        return handymanResponse("VERIFIED",
                 "Email je uspešno potvrđen. Sada se možete prijaviti na nalog.");
     }
 
@@ -194,8 +207,8 @@ public class EmailVerificationService {
 
         if (Boolean.TRUE.equals(req.getEmailVerified())) {
             markUsed(token);
-            return EmailVerificationResponse.of("ALREADY_VERIFIED",
-                    "Email je već potvrđen. Admin će pregledati vašu prijavu.");
+            return companyResponse("ALREADY_VERIFIED",
+                    "Email je već potvrđen. Admin će pregledati vašu prijavu preduzeća.");
         }
 
         req.setEmailVerified(true);
@@ -208,10 +221,11 @@ public class EmailVerificationService {
 
         emailService.send(req.getEmail(), "Email potvrđen — prijava preduzeća",
                 "Poštovani,\n\nVaš email je potvrđen.\nAdmin će pregledati prijavu preduzeća \""
-                        + req.getCompanyName() + "\" i obavestićemo vas o odluci.\n\nMajstor 365");
+                        + req.getCompanyName() + "\" i obavestićemo vas o odluci.\n\n"
+                        + "Nalog za prijavu biće aktivan tek nakon odobrenja admina.\n\nMajstor 365");
 
-        return EmailVerificationResponse.of("VERIFIED",
-                "Email je potvrđen. Admin će pregledati prijavu preduzeća i obavestićemo vas emailom.");
+        return companyResponse("VERIFIED",
+                "Email je potvrđen. Admin će pregledati prijavu preduzeća i obavestićemo vas emailom kada nalog bude aktivan.");
     }
 
     private void markUsed(EmailVerificationToken token) {
