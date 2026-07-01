@@ -5,6 +5,7 @@ import com.majstornaklik.entity.*;
 import com.majstornaklik.repository.*;
 import com.majstornaklik.security.CustomUserDetailsService;
 import com.majstornaklik.security.JwtService;
+import com.majstornaklik.security.PrimaryAdminAuthorization;
 import com.majstornaklik.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,7 @@ public class AuthService {
     private final EmailVerificationService emailVerificationService;
     private final PhoneUniquenessService phoneUniquenessService;
     private final CustomUserDetailsService userDetailsService;
+    private final PrimaryAdminAuthorization primaryAdminAuthorization;
 
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
@@ -159,8 +161,14 @@ public class AuthService {
         Object userDto = switch (principal.getRole()) {
             case "ROLE_CLIENT" -> DtoMapper.toUserDto(userRepository.findByEmail(email).orElseThrow());
             case "ROLE_HANDYMAN" -> DtoMapper.toHandymanDto(handymanRepository.findByEmail(email).orElseThrow());
-            case "ROLE_ADMIN" -> Map.of("id", principal.getId(), "email", email,
-                    "fullName", adminRepository.findByEmail(email).map(Admin::getFullName).orElse("Admin"));
+            case "ROLE_ADMIN" -> {
+                Admin admin = adminRepository.findByEmail(email).orElseThrow();
+                yield Map.of(
+                        "id", principal.getId(),
+                        "email", email,
+                        "fullName", admin.getFullName(),
+                        "primaryAdmin", primaryAdminAuthorization.isPrimaryAdmin(email));
+            }
             default -> throw new IllegalArgumentException("Nepoznata uloga");
         };
         String accessToken = jwtService.generateToken(principal);

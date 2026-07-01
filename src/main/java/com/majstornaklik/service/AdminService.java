@@ -39,6 +39,7 @@ public class AdminService {
     private final JobApplicationRepository jobApplicationRepository;
     private final CompanyRegistrationRepository companyRegistrationRepository;
     private final PhoneUniquenessService phoneUniquenessService;
+    private final ServiceInquiryRepository serviceInquiryRepository;
 
     public Page<DtoMapper.UserDto> listUsers(String search, Pageable pageable) {
         if (search != null && !search.isBlank()) {
@@ -230,6 +231,7 @@ public class AdminService {
         stats.put("totalReviews", reviewRepository.count());
         stats.put("newContactMessages", contactMessageRepository.countByStatus("NEW"));
         stats.put("pendingCompanyRegistrations", companyRegistrationRepository.countByStatus("PENDING"));
+        stats.put("newServiceInquiries", serviceInquiryRepository.countByStatus("NEW"));
         return stats;
     }
 

@@ -8,11 +8,13 @@ import com.majstornaklik.dto.DtoMapper;
 import com.majstornaklik.dto.ContactMessageDto;
 import com.majstornaklik.dto.CompanyRegistrationDto;
 import com.majstornaklik.dto.RejectTokenRequest;
+import com.majstornaklik.dto.ServiceInquiryDto;
 import com.majstornaklik.entity.Review;
 import com.majstornaklik.service.AdminService;
 import com.majstornaklik.service.ApplicationService;
 import com.majstornaklik.service.CompanyRegistrationService;
 import com.majstornaklik.service.ContactService;
+import com.majstornaklik.service.ServiceInquiryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -31,6 +33,7 @@ public class AdminController {
     private final ContactService contactService;
     private final ApplicationService applicationService;
     private final CompanyRegistrationService companyRegistrationService;
+    private final ServiceInquiryService serviceInquiryService;
 
     @GetMapping("/users")
     public Page<DtoMapper.UserDto> listUsers(@RequestParam(required = false) String search, Pageable pageable) {
@@ -204,5 +207,20 @@ public class AdminController {
             @PathVariable UUID id,
             @RequestBody(required = false) RejectTokenRequest req) {
         return companyRegistrationService.reject(id, req != null ? req.adminNote() : null);
+    }
+
+    @GetMapping("/inquiries")
+    public Page<ServiceInquiryDto> listInquiries(Pageable pageable) {
+        return serviceInquiryService.listForPrimaryAdmin(pageable);
+    }
+
+    @GetMapping("/inquiries/{id}")
+    public ServiceInquiryDto getInquiry(@PathVariable UUID id) {
+        return serviceInquiryService.getForPrimaryAdmin(id);
+    }
+
+    @PostMapping("/inquiries/{id}/read")
+    public ServiceInquiryDto markInquiryRead(@PathVariable UUID id) {
+        return serviceInquiryService.markRead(id);
     }
 }

@@ -4,8 +4,10 @@ import com.majstornaklik.dto.DtoMapper;
 import com.majstornaklik.entity.Handyman;
 import com.majstornaklik.repository.HandymanRepository;
 import com.majstornaklik.security.SecurityUtils;
+import com.majstornaklik.dto.HandymanSearchResponse;
 import com.majstornaklik.service.ApplicationService;
 import com.majstornaklik.service.HandymanCategoryService;
+import com.majstornaklik.service.HandymanSearchService;
 import com.majstornaklik.service.JobService;
 import com.majstornaklik.service.PhoneUniquenessService;
 import com.majstornaklik.service.TokenService;
@@ -32,7 +34,20 @@ public class HandymanController {
     private final ApplicationService applicationService;
     private final JobService jobService;
     private final HandymanCategoryService handymanCategoryService;
+    private final HandymanSearchService handymanSearchService;
     private final PhoneUniquenessService phoneUniquenessService;
+
+    @GetMapping("/search")
+    public HandymanSearchResponse search(
+            @RequestParam String categorySlug,
+            @RequestParam(required = false) String city) {
+        return handymanSearchService.search(categorySlug, city);
+    }
+
+    @GetMapping("/count")
+    public Map<String, Long> countByCategory(@RequestParam String categorySlug) {
+        return Map.of("count", handymanSearchService.countByCategorySlug(categorySlug));
+    }
 
     @GetMapping("/me")
     public DtoMapper.HandymanDto getMe() {
@@ -104,7 +119,8 @@ public class HandymanController {
     public DtoMapper.HandymanPublicDto getPublic(@PathVariable UUID id) {
         Handyman h = handymanRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
-        return DtoMapper.toHandymanPublicDto(h);
+        boolean showContact = handymanSearchService.canShowContactForCurrentUser();
+        return DtoMapper.toHandymanPublicDto(h, showContact);
     }
 
     @GetMapping("/me/tokens")

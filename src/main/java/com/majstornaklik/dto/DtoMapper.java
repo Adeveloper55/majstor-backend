@@ -30,8 +30,13 @@ public final class DtoMapper {
     }
 
     public static HandymanPublicDto toHandymanPublicDto(Handyman h) {
-        return new HandymanPublicDto(h.getId(), h.getFullName(), h.getCity(), h.getBio(),
-                h.getProfileImageUrl(), h.getIsVerified(), h.getAverageRating(), h.getTotalReviews());
+        return toHandymanPublicDto(h, false);
+    }
+
+    public static HandymanPublicDto toHandymanPublicDto(Handyman h, boolean showContact) {
+        return new HandymanPublicDto(h.getId(), h.getFullName(), h.getCompanyName(), h.getCity(), h.getBio(),
+                h.getProfileImageUrl(), h.getIsVerified(), h.getAverageRating(), h.getTotalReviews(),
+                showContact ? h.getPhone() : null, showContact ? h.getEmail() : null);
     }
 
     public static CategoryDto toCategoryDto(Category c) {
@@ -100,9 +105,10 @@ public final class DtoMapper {
                               String postalCode, String country, String contactPerson, Boolean isCompany,
                               List<Integer> categoryIds, Instant createdAt) {}
 
-    public record HandymanPublicDto(UUID id, String fullName, String city, String bio,
+    public record HandymanPublicDto(UUID id, String fullName, String companyName, String city, String bio,
                                    String profileImageUrl, Boolean isVerified,
-                                   Double averageRating, Integer totalReviews) {}
+                                   Double averageRating, Integer totalReviews,
+                                   String phone, String email) {}
 
     public record CategoryDto(Integer id, String name, String slug, String description,
                               String iconUrl, Integer baseTokenCost) {}
