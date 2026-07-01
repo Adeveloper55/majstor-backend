@@ -33,6 +33,10 @@ public class Admin {
     @Builder.Default
     private Boolean isActive = true;
 
+    @Column(name = "is_hidden")
+    @Builder.Default
+    private Boolean isHidden = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

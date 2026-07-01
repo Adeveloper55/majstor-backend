@@ -3,6 +3,7 @@ package com.majstornaklik.controller;
 import com.majstornaklik.dto.*;
 import com.majstornaklik.service.AuthService;
 import com.majstornaklik.service.CompanyRegistrationService;
+import com.majstornaklik.service.EmailAvailabilityService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +15,12 @@ public class AuthController {
 
     private final AuthService authService;
     private final CompanyRegistrationService companyRegistrationService;
+    private final EmailAvailabilityService emailAvailabilityService;
+
+    @GetMapping("/check-email")
+    public EmailAvailabilityResponse checkEmail(@RequestParam String email) {
+        return emailAvailabilityService.check(email);
+    }
 
     @PostMapping("/register/client")
     public RegisterPendingResponse registerClient(@Valid @RequestBody RegisterClientRequest req) {
