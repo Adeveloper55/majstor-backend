@@ -1,13 +1,15 @@
 package com.majstornaklik.dto;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
-public record HandymanListingDto(
+public record HandymanProfileDto(
         UUID id,
         String fullName,
         String companyName,
         String displayName,
+        String contactPerson,
         String city,
         String bio,
         String profileImageUrl,
@@ -17,9 +19,9 @@ public record HandymanListingDto(
         String phone,
         String maskedPhone,
         String email,
-        ReviewSnippetDto latestReview,
+        boolean contactVisible,
+        List<String> serviceNames,
+        HandymanListingDto.ReviewSnippetDto latestReview,
         Integer yearsExperience,
         Instant memberSince
-) {
-    public record ReviewSnippetDto(Integer rating, String comment, String reviewerName) {}
-}
+) {}

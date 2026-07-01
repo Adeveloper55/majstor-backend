@@ -1,6 +1,7 @@
 package com.majstornaklik.service;
 
 import com.majstornaklik.dto.HandymanListingDto;
+import com.majstornaklik.dto.HandymanProfileDto;
 import com.majstornaklik.dto.HandymanSearchResponse;
 import com.majstornaklik.entity.Category;
 import com.majstornaklik.entity.Handyman;
@@ -12,6 +13,7 @@ import com.majstornaklik.repository.ReviewRepository;
 import com.majstornaklik.repository.UserRepository;
 import com.majstornaklik.security.SecurityUtils;
 import com.majstornaklik.util.CityUtils;
+import com.majstornaklik.util.PhoneUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -82,6 +85,48 @@ public class HandymanSearchService {
                 .count();
     }
 
+    @Transactional(readOnly = true)
+    public HandymanProfileDto getPublicProfile(UUID id) {
+        Handyman h = handymanRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Izvođač nije pronađen"));
+        if (!Boolean.TRUE.equals(h.getIsActive()) || !Boolean.TRUE.equals(h.getEmailVerified())) {
+            throw new IllegalArgumentException("Izvođač nije dostupan");
+        }
+
+        boolean showContact = canShowContactForCurrentUser();
+        List<Integer> categoryIds = handymanCategoryService.getCategoryIds(h);
+        List<String> serviceNames = categoryRepository.findAllById(categoryIds).stream()
+                .map(Category::getName)
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+
+        HandymanListingDto.ReviewSnippetDto latestReview = findLatestReview(h.getId());
+        Integer years = h.getCreatedAt() != null
+                ? (int) ChronoUnit.YEARS.between(h.getCreatedAt(), Instant.now())
+                : null;
+
+        return new HandymanProfileDto(
+                h.getId(),
+                h.getFullName(),
+                h.getCompanyName(),
+                resolveDisplayName(h),
+                h.getContactPerson(),
+                h.getCity(),
+                h.getBio(),
+                h.getProfileImageUrl(),
+                h.getIsVerified(),
+                h.getAverageRating(),
+                h.getTotalReviews(),
+                showContact ? h.getPhone() : null,
+                PhoneUtils.maskForDisplay(h.getPhone()),
+                showContact ? h.getEmail() : null,
+                showContact,
+                serviceNames,
+                latestReview,
+                years != null && years > 0 ? years : null,
+                h.getCreatedAt());
+    }
+
     private HandymanListingDto toListingDto(Handyman h, boolean showContact) {
         String displayName = resolveDisplayName(h);
         HandymanListingDto.ReviewSnippetDto latestReview = findLatestReview(h.getId());
@@ -101,6 +146,7 @@ public class HandymanSearchService {
                 h.getAverageRating(),
                 h.getTotalReviews(),
                 showContact ? h.getPhone() : null,
+                PhoneUtils.maskForDisplay(h.getPhone()),
                 showContact ? h.getEmail() : null,
                 latestReview,
                 years != null && years > 0 ? years : null,

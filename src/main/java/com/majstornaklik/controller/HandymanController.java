@@ -49,6 +49,11 @@ public class HandymanController {
         return Map.of("count", handymanSearchService.countByCategorySlug(categorySlug));
     }
 
+    @GetMapping("/public-profile/{id}")
+    public com.majstornaklik.dto.HandymanProfileDto getPublicProfile(@PathVariable UUID id) {
+        return handymanSearchService.getPublicProfile(id);
+    }
+
     @GetMapping("/me")
     public DtoMapper.HandymanDto getMe() {
         securityUtils.requireRole("ROLE_HANDYMAN");

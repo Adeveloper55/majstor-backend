@@ -44,4 +44,17 @@ public final class PhoneUtils {
         }
         return normalized;
     }
+
+    /** Partial display for guests, e.g. +381654475... */
+    public static String maskForDisplay(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return null;
+        }
+        String trimmed = phone.trim();
+        int visible = Math.min(8, trimmed.length());
+        if (trimmed.length() <= visible) {
+            return trimmed + "...";
+        }
+        return trimmed.substring(0, visible) + "...";
+    }
 }
