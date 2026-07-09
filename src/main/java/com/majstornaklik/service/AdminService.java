@@ -167,9 +167,9 @@ public class AdminService {
         job.setStatus("OPEN");
         jobListingRepository.save(job);
         userRepository.findById(job.getUserId()).ifPresent(u ->
-                emailService.send(u.getEmail(), "Oglas odobren — sada je vidljiv",
-                        "Admin je odobrio vaš oglas \"" + job.getTitle() + "\" sa cenom od "
-                                + req.tokenCost() + " tokena. Oglas je sada vidljiv majstorima i izvođačima i mogu da kupe kontakt."));
+                emailService.send(u.getEmail(), "Oglas uspešno odobren",
+                        "Vaš oglas \"" + job.getTitle() + "\" je uspešno odobren. "
+                                + "Oglas je sada vidljiv majstorima i izvođačima."));
         return getJob(id);
     }
 
