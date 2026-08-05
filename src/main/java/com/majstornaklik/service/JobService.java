@@ -82,7 +82,7 @@ public class JobService {
         userRepository.findById(userId).ifPresent(u ->
                 emailService.sendSafely(u.getEmail(), "Oglas poslat na odobrenje",
                         "Vaš oglas \"" + job.getTitle() + "\" je poslat adminu na pregled. "
-                                + "Biće vidljiv majstorima i izvođačima kada admin odobri oglas i postavi cenu u tokenima."));
+                                + "Biće vidljiv majstorima i izvođačima kada admin odobri oglas."));
         emailService.sendToAdmin("Novi oglas na čekanju",
                 "Klijent je poslao oglas \"" + job.getTitle() + "\" (" + job.getCity() + "). "
                         + "AI predlog: " + tokenCost + " tokena. "
