@@ -223,4 +223,9 @@ public class AdminController {
     public ServiceInquiryDto markInquiryRead(@PathVariable UUID id) {
         return serviceInquiryService.markRead(id);
     }
+
+    @DeleteMapping("/inquiries/{id}")
+    public void deleteInquiry(@PathVariable UUID id) {
+        serviceInquiryService.deleteForPrimaryAdmin(id);
+    }
 }

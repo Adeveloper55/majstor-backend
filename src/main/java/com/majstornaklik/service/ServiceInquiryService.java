@@ -73,6 +73,14 @@ public class ServiceInquiryService {
         return ServiceInquiryDto.from(repository.save(inquiry));
     }
 
+    @Transactional
+    public void deleteForPrimaryAdmin(UUID id) {
+        primaryAdminAuthorization.requirePrimaryAdmin();
+        ServiceInquiry inquiry = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Upit nije pronađen"));
+        repository.delete(inquiry);
+    }
+
     public long countNew() {
         return repository.countByStatus("NEW");
     }
