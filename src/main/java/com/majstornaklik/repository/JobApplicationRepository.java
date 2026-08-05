@@ -31,4 +31,12 @@ public interface JobApplicationRepository extends JpaRepository<JobApplication, 
 
     @Query("SELECT a FROM JobApplication a WHERE a.handyman.id = :handymanId AND a.status IN ('UNLOCKED', 'ACCEPTED') ORDER BY a.appliedAt DESC")
     Page<JobApplication> findUnlockedByHandymanId(@Param("handymanId") UUID handymanId, Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM JobApplication a WHERE a.handyman.id = :handymanId")
+    int deleteByHandymanId(@Param("handymanId") UUID handymanId);
+
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM JobApplication a WHERE a.jobListingId = :jobListingId")
+    int deleteByJobListingId(@Param("jobListingId") UUID jobListingId);
 }

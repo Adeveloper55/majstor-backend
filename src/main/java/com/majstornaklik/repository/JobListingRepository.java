@@ -12,7 +12,12 @@ import java.util.UUID;
 
 public interface JobListingRepository extends JpaRepository<JobListing, UUID> {
     Page<JobListing> findByUserId(UUID userId, Pageable pageable);
+    List<JobListing> findByUserId(UUID userId);
     Page<JobListing> findByStatus(String status, Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE JobListing j SET j.selectedHandymanId = null WHERE j.selectedHandymanId = :handymanId")
+    int clearSelectedHandyman(@Param("handymanId") UUID handymanId);
 
     @Query(value = "SELECT j FROM JobListing j JOIN FETCH j.category WHERE j.userId = :userId",
             countQuery = "SELECT COUNT(j) FROM JobListing j WHERE j.userId = :userId")

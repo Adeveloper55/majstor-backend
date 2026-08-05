@@ -23,4 +23,8 @@ public interface TokenPurchaseRequestRepository extends JpaRepository<TokenPurch
     @Query(value = "SELECT r FROM TokenPurchaseRequest r JOIN FETCH r.handyman WHERE r.status = :status ORDER BY r.createdAt DESC",
             countQuery = "SELECT COUNT(r) FROM TokenPurchaseRequest r WHERE r.status = :status")
     Page<TokenPurchaseRequest> findByStatusWithHandyman(@Param("status") String status, Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM TokenPurchaseRequest r WHERE r.handyman.id = :handymanId")
+    int deleteByHandymanId(@Param("handymanId") UUID handymanId);
 }

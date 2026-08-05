@@ -18,8 +18,10 @@ import com.majstornaklik.util.PibUtils;
 import com.majstornaklik.util.PhoneUtils;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -40,6 +42,10 @@ public class AdminService {
     private final CompanyRegistrationRepository companyRegistrationRepository;
     private final PhoneUniquenessService phoneUniquenessService;
     private final ServiceInquiryRepository serviceInquiryRepository;
+    private final TokenTransactionRepository tokenTransactionRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final EmailVerificationTokenRepository emailVerificationTokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
 
     public Page<DtoMapper.UserDto> listUsers(String search, Pageable pageable) {
         if (search != null && !search.isBlank()) {
@@ -56,10 +62,61 @@ public class AdminService {
     }
 
     @Transactional
-    public void deactivateUser(UUID id) {
-        User user = userRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Korisnik nije pronađen"));
-        user.setIsActive(false);
-        userRepository.save(user);
+    public void deleteUser(UUID id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Korisnik nije pronađen"));
+        String email = user.getEmail();
+
+        List<JobListing> jobs = jobListingRepository.findByUserId(id);
+        for (JobListing job : jobs) {
+            deleteJobGraph(job.getId());
+        }
+
+        reviewRepository.deleteAllForUser(id);
+        refreshTokenRepository.deleteByUserId(id);
+        emailVerificationTokenRepository.deleteByEmail(email);
+        passwordResetTokenRepository.deleteByEmail(email);
+
+        userRepository.delete(user);
+    }
+
+    @Transactional
+    public void deleteHandyman(UUID id) {
+        Handyman handyman = handymanRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
+        String email = handyman.getEmail();
+
+        tokenTransactionRepository.deleteByHandymanId(id);
+        requestRepository.deleteByHandymanId(id);
+        jobApplicationRepository.deleteByHandymanId(id);
+        reviewRepository.deleteAllForHandyman(id);
+        jobListingRepository.clearSelectedHandyman(id);
+
+        companyRegistrationRepository.deleteByHandymanId(id);
+        companyRegistrationRepository.deleteByEmail(email);
+
+        refreshTokenRepository.deleteByUserId(id);
+        refreshTokenRepository.deleteByEmail(email);
+        emailVerificationTokenRepository.deleteByEmail(email);
+        passwordResetTokenRepository.deleteByEmail(email);
+
+        handymanRepository.delete(handyman);
+    }
+
+    /** Briše posao sa svim zavisnim zapisima pre brisanja klijenta. */
+    private void deleteJobGraph(UUID jobId) {
+        reviewRepository.deleteByJobListingId(jobId);
+
+        List<JobApplication> applications = jobApplicationRepository.findByJobListingId(jobId);
+        if (!applications.isEmpty()) {
+            List<UUID> applicationIds = applications.stream()
+                    .map(JobApplication::getId)
+                    .collect(Collectors.toList());
+            tokenTransactionRepository.deleteByJobApplicationIdIn(applicationIds);
+            jobApplicationRepository.deleteByJobListingId(jobId);
+        }
+
+        jobListingRepository.deleteById(jobId);
     }
 
     public Page<DtoMapper.HandymanDto> listHandymen(String search, Pageable pageable) {
@@ -67,20 +124,13 @@ public class AdminService {
             return handymanRepository.findByFullNameContainingIgnoreCaseOrEmailContainingIgnoreCase(search, search, pageable)
                     .map(DtoMapper::toHandymanDto);
         }
-            return handymanRepository.findAll(pageable)
-                    .map(DtoMapper::toHandymanDto);
+        return handymanRepository.findAll(pageable)
+                .map(DtoMapper::toHandymanDto);
     }
 
     public DtoMapper.HandymanDto getHandyman(UUID id) {
         Handyman h = handymanRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
         return DtoMapper.toHandymanDto(h);
-    }
-
-    @Transactional
-    public void deactivateHandyman(UUID id) {
-        Handyman h = handymanRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Majstor nije pronađen"));
-        h.setIsActive(false);
-        handymanRepository.save(h);
     }
 
     @Transactional

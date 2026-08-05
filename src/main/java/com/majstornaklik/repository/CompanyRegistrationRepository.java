@@ -30,4 +30,8 @@ public interface CompanyRegistrationRepository extends JpaRepository<CompanyRegi
     boolean existsByNormalizedPhoneAndStatus(String normalizedPhone, String status);
 
     boolean existsByNormalizedPhoneAndStatusAndIdNot(String normalizedPhone, String status, UUID id);
+
+    void deleteByHandymanId(UUID handymanId);
+
+    void deleteByEmail(String email);
 }

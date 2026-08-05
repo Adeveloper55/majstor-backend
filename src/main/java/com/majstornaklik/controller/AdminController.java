@@ -46,8 +46,8 @@ public class AdminController {
     }
 
     @DeleteMapping("/users/{id}")
-    public void deactivateUser(@PathVariable UUID id) {
-        adminService.deactivateUser(id);
+    public void deleteUser(@PathVariable UUID id) {
+        adminService.deleteUser(id);
     }
 
     @GetMapping("/handymen")
@@ -66,8 +66,8 @@ public class AdminController {
     }
 
     @DeleteMapping("/handymen/{id}")
-    public void deactivateHandyman(@PathVariable UUID id) {
-        adminService.deactivateHandyman(id);
+    public void deleteHandyman(@PathVariable UUID id) {
+        adminService.deleteHandyman(id);
     }
 
     @PostMapping("/handymen/{id}/adjust-tokens")
